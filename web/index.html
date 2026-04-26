@@ -1,0 +1,1998 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LLM API Gateway</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/static/vue.global.js"></script>
+    <script src="/static/element-plus.js"></script>
+    <link rel="stylesheet" href="/static/element-plus.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+
+        .layout { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 220px;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-logo {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sidebar-logo h1 {
+            font-size: 18px;
+            color: #409eff;
+            font-weight: 600;
+        }
+
+        .sidebar-logo span {
+            font-size: 11px;
+            color: #888;
+            display: block;
+            margin-top: 4px;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 10px 0;
+        }
+
+        .nav-section {
+            margin-bottom: 5px;
+        }
+
+        .nav-section-title {
+            font-size: 11px;
+            color: #666;
+            padding: 10px 20px 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #ccc;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+        }
+
+        .nav-item.active {
+            background: rgba(64, 158, 255, 0.15);
+            color: #409eff;
+            border-left-color: #409eff;
+        }
+
+        .nav-item-icon {
+            width: 20px;
+            margin-right: 12px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .nav-item-text {
+            font-size: 14px;
+        }
+
+        .sidebar-footer {
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            margin-left: 220px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: #fff;
+            padding: 0 20px;
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-title {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .breadcrumb {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #409eff, #66b1ff);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .user-name {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .user-role {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .header-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+
+        .btn-outline:hover {
+            border-color: #409eff;
+            color: #409eff;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-item { margin-bottom: 15px; }
+        .form-item label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
+        .form-item input, .form-item select, .form-item textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e4e7ed;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .form-item input:focus, .form-item select:focus, .form-item textarea:focus {
+            outline: none;
+            border-color: #409eff;
+        }
+        .form-item textarea { resize: vertical; min-height: 80px; }
+
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn + .btn { margin-left: 8px; }
+        .btn-primary { background: #409eff; color: #fff; }
+        .btn-primary:hover { background: #66b1ff; }
+        .btn-success { background: #67c23a; color: #fff; }
+        .btn-success:hover { background: #85ce61; }
+        .btn-danger { background: #f56c6c; color: #fff; }
+        .btn-danger:hover { background: #f78989; }
+        .btn-secondary { background: #909399; color: #fff; }
+        .btn-secondary:hover { background: #a6a9ad; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #fafafa; font-weight: 500; color: #666; font-size: 13px; }
+        tr:hover { background: #fafafa; }
+
+        .status { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+        .status-active { background: #e1f3d8; color: #67c23a; }
+        .status-inactive { background: #f4f4f5; color: #909399; }
+        .status-disabled { background: #fef0f0; color: #f56c6c; }
+
+        .quota-display { font-size: 24px; color: #409eff; font-weight: bold; }
+        .error { color: #f56c6c; margin-top: 10px; font-size: 13px; }
+        .success { color: #67c23a; margin-top: 10px; font-size: 13px; }
+        .loading { text-align: center; padding: 60px; color: #909399; }
+
+        .api-key-display { font-family: 'Monaco', 'Menlo', monospace; background: #f5f7fa; padding: 8px 12px; border-radius: 4px; word-break: break-all; font-size: 13px; }
+
+        .stat-card { text-align: center; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .stat-value { font-size: 28px; color: #409eff; font-weight: bold; }
+        .stat-label { color: #909399; margin-top: 8px; font-size: 13px; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px; }
+        .stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+        .login-card {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 40px;
+        }
+
+        .sub-card {
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .sub-card h3 {
+            font-size: 15px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #909399;
+        }
+
+        pre {
+            background: #f5f7fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            background: #ecf5ff;
+            color: #409eff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #409eff;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div v-if="!isLoggedIn" class="login-page">
+            <div class="card login-card">
+                <h2 style="text-align: center; margin-bottom: 30px;">{{ t('login_title') }} LLM API Gateway</h2>
+                <div class="form-item">
+                    <label>{{ t('username') }}</label>
+                    <input type="text" v-model="loginForm.username" :placeholder="t('enter_username')">
+                </div>
+                <div class="form-item">
+                    <label>{{ t('password') }}</label>
+                    <input type="password" v-model="loginForm.password" :placeholder="t('enter_password')" @keyup.enter="login">
+                </div>
+                <div v-if="loginError" class="error">{{ loginError }}</div>
+                <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" @click="login" :disabled="loading">
+                    {{ loading ? t('logging_in') : t('login') }}
+                </button>
+            </div>
+        </div>
+
+        <div v-else class="layout">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-logo">
+                    <h1>LLM API</h1>
+                    <span>Gateway Admin</span>
+                </div>
+
+                <div class="sidebar-nav">
+                    <!-- User Section -->
+                    <div class="nav-section">
+                        <div class="nav-section-title">{{ t('user') }}</div>
+                        <div class="nav-item" :class="{ active: currentView === 'dashboard' }" @click="currentView = 'dashboard'">
+                            <span class="nav-item-icon">📊</span>
+                            <span class="nav-item-text">{{ t('dashboard') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'tokens' }" @click="currentView = 'tokens'">
+                            <span class="nav-item-icon">🔑</span>
+                            <span class="nav-item-text">{{ t('api_tokens') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'shop' }" @click="currentView = 'shop'">
+                            <span class="nav-item-icon">🛒</span>
+                            <span class="nav-item-text">{{ t('shop') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'apidoc' }" @click="currentView = 'apidoc'">
+                            <span class="nav-item-icon">📖</span>
+                            <span class="nav-item-text">{{ t('api_usage') }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Admin Section -->
+                    <div class="nav-section" v-if="isAdmin">
+                        <div class="nav-section-title">{{ t('admin') }}</div>
+                        <div class="nav-item" :class="{ active: currentView === 'channels' }" @click="currentView = 'channels'">
+                            <span class="nav-item-icon">📡</span>
+                            <span class="nav-item-text">{{ t('channel_management') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'groups' }" @click="currentView = 'groups'">
+                            <span class="nav-item-icon">📁</span>
+                            <span class="nav-item-text">{{ t('channel_groups') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'packages' }" @click="currentView = 'packages'">
+                            <span class="nav-item-icon">📦</span>
+                            <span class="nav-item-text">{{ t('package_management') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'orders' }" @click="currentView = 'orders'">
+                            <span class="nav-item-icon">📋</span>
+                            <span class="nav-item-text">{{ t('order_management') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'users' }" @click="currentView = 'users'">
+                            <span class="nav-item-icon">👥</span>
+                            <span class="nav-item-text">{{ t('user_management') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'redemptions' }" @click="currentView = 'redemptions'">
+                            <span class="nav-item-icon">🎫</span>
+                            <span class="nav-item-text">{{ t('redemption_codes') }}</span>
+                        </div>
+                        <div class="nav-item" :class="{ active: currentView === 'logs' }" @click="currentView = 'logs'">
+                            <span class="nav-item-icon">📝</span>
+                            <span class="nav-item-text">{{ t('usage_logs') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-footer">
+                    <div>v0.0.1</div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main">
+                <!-- Header -->
+                <div class="header">
+                    <div class="header-left">
+                        <span class="breadcrumb">{{ getViewName() }}</span>
+                    </div>
+                    <div class="header-right">
+                        <div class="lang-selector" style="margin-right: 15px;">
+                            <select v-model="currentLang" @change="setLanguage(currentLang)" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer;">
+                                <option value="zh">中文</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                        <div class="user-info">
+                            <div class="user-avatar">{{ userInfo.username?.charAt(0).toUpperCase() }}</div>
+                            <div>
+                                <div class="user-name">{{ userInfo.display_name || userInfo.username }}</div>
+                                <div class="user-role">{{ getRoleName(userInfo.role) }}</div>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline" @click="logout">{{ t('logout') }}</button>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="content">
+                    <!-- Dashboard -->
+                    <div v-if="currentView === 'dashboard'">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ isAdmin ? t('unlimited_quota') : formatQuota(userInfo.quota) }}</div>
+                                <div class="stat-label">{{ t('available_quota') }}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ formatQuota(userInfo.used_quota) }}</div>
+                                <div class="stat-label">{{ t('used_quota') }}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ tokens.length }}</div>
+                                <div class="stat-label">{{ t('api_tokens') }}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ getRoleName(userInfo.role) }}</div>
+                                <div class="stat-label">{{ t('current_role') }}</div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('api_usage_guide') }}</span>
+                            </div>
+                            <p style="color: #666; margin-bottom: 15px;">{{ t('api_usage_guide_desc') }}</p>
+                            <pre>curl -X POST https://your-domain.com/v1/chat/completions \
+  -H "Authorization: Bearer {{ userToken }}" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "deepseek-chat", "messages": [{"role": "user", "content": "Hello"}]}'</pre>
+
+                            <div v-if="userToken" style="margin-top: 20px;">
+                                <label style="font-weight: 500; margin-bottom: 8px; display: block;">{{ t('your_api_key') }}:</label>
+                                <div class="api-key-display">{{ userToken }}</div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('quick_actions') }}</span>
+                            </div>
+                            <div class="quick-actions">
+                                <button class="action-btn" @click="currentView = 'tokens'">{{ t('create_token') }}</button>
+                                <button class="action-btn" @click="currentView = 'shop'">{{ t('buy_quota') }}</button>
+                                <button v-if="isAdmin" class="action-btn" @click="currentView = 'channels'">{{ t('manage_channels') }}</button>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('redeem_code') }}</span>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="text" v-model="redeemCode" :placeholder="t('enter_redeem_code')" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                                <button class="btn btn-primary" @click="redeemCodeFn" :disabled="redeeming">
+                                    {{ redeeming ? t('redeeming') : t('redeem') }}
+                                </button>
+                            </div>
+                            <div v-if="redeemMsg" :class="redeemMsg.type === 'error' ? 'error' : 'success'" style="margin-top: 10px;">{{ redeemMsg.text }}</div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('recent_logs') }}</span>
+                            </div>
+                            <table>
+                                <thead><tr><th>{{ t('time') }}</th><th>{{ t('model') }}</th><th>{{ t('quota_used') }}</th><th>{{ t('elapsed') }}</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="log in recentLogs" :key="log.id">
+                                        <td>{{ formatTime(log.created_at) }}</td>
+                                        <td>{{ log.model_name }}</td>
+                                        <td>{{ log.quota }}</td>
+                                        <td>{{ log.elapsed_time }}ms</td>
+                                    </tr>
+                                    <tr v-if="recentLogs.length === 0">
+                                        <td colspan="4" class="empty-state">{{ t('no_logs') }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Tokens -->
+                    <div v-if="currentView === 'tokens'">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('token_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreateToken = true">{{ t('create_token') }}</button>
+                            </div>
+
+                            <div v-if="showCreateToken" class="sub-card">
+                                <h3>{{ t('create_token') }}</h3>
+                                <div class="form-item">
+                                    <label>{{ t('token_name') }}</label>
+                                    <input type="text" v-model="newToken.name" :placeholder="t('token_name_placeholder')">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('quota') }} (-1: {{ t('unlimited') }})</label>
+                                    <input type="number" v-model="newToken.remain_quota" placeholder="1000000">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('expired_time') }} ({{ t('seconds') }}, -1: {{ t('never_expire') }})</label>
+                                    <input type="number" v-model="newToken.expired_time" placeholder="-1">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('channel_group') }}</label>
+                                    <select v-model="newToken.channel_group">
+                                        <option value="">{{ t('no_limit') }}</option>
+                                        <option v-for="g in channelGroups" :key="g" :value="g">{{ g }}</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-success" @click="createToken">{{ t('create') }}</button>
+                                <button class="btn btn-secondary" @click="showCreateToken = false">{{ t('cancel') }}</button>
+                                <div v-if="tokenError" class="error">{{ tokenError }}</div>
+                            </div>
+
+                            <table style="width: 100%; table-layout: fixed;">
+                                <thead><tr>
+                                    <th style="width: 100px;">{{ t('name') }}</th>
+                                    <th style="width: 200px;">{{ t('key') }}</th>
+                                    <th style="width: 80px;">{{ t('channel_group') }}</th>
+                                    <th style="width: 80px;">{{ t('remain_quota') }}</th>
+                                    <th style="width: 70px;">{{ t('status') }}</th>
+                                    <th style="width: 140px;">{{ t('created_at') }}</th>
+                                    <th style="width: 80px;">{{ t('action') }}</th>
+                                </tr></thead>
+                                <tbody>
+                                    <tr v-for="token in tokens" :key="token.id">
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ token.name }}</td>
+                                        <td><span class="api-key-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ token.key }}</span></td>
+                                        <td>{{ token.channel_group || '-' }}</td>
+                                        <td>{{ token.unlimited_quota ? t('unlimited') : formatQuota(token.remain_quota) }}</td>
+                                        <td><span :class="'status ' + (token.status === 1 ? 'status-active' : 'status-disabled')">{{ token.status === 1 ? t('enabled') : t('disabled') }}</span></td>
+                                        <td>{{ formatTime(token.created_time) }}</td>
+                                        <td><button class="btn btn-danger" @click="deleteToken(token.id)" style="padding: 5px 10px;">{{ t('delete') }}</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Shop -->
+                    <div v-if="currentView === 'shop'">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('online_shop') }}</span>
+                            </div>
+                            <p style="color: #666; margin-bottom: 20px;">{{ t('visit_shop') }} <a href="/shop" target="_blank" style="color: #409eff;">/shop</a></p>
+                            <div class="quick-actions">
+                                <a href="/shop" target="_blank" class="action-btn">{{ t('open_shop') }} →</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Doc -->
+                    <div v-if="currentView === 'apidoc'">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('api_doc_title') }}</span>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">📡 {{ t('api_endpoint') }}</h3>
+                                <div style="background: #f5f7fa; padding: 15px; border-radius: 8px; font-family: monospace;">
+                                    <p style="margin: 0;"><strong>Base URL:</strong> <span style="color: #409eff;">http://your-domain:3000/v1</span></p>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">🔑 {{ t('auth_method') }}</h3>
+                                <div style="background: #f5f7fa; padding: 15px; border-radius: 8px;">
+                                    <p>{{ t('auth_desc') }} <code>Authorization: Bearer YOUR_API_TOKEN</code></p>
+                                    <p style="color: #666; font-size: 13px; margin-top: 5px;">{{ t('token_location') }}</p>
+                                </div>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">🗂 {{ t('chat_completions') }}</h3>
+                                <p style="color: #666; margin-bottom: 15px;">{{ t('chat_desc') }}</p>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">Python - OpenAI SDK</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_API_TOKEN",
+    base_url="http://your-domain:3000/v1"
+)
+
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Hello"}
+    ],
+    max_tokens=500,
+    temperature=0.7
+)
+
+print(response.choices[0].message.content)</code></pre>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">Python - Anthropic SDK</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="YOUR_API_TOKEN",
+    base_url="http://your-domain:3000/v1"
+)
+
+response = client.messages.create(
+    model="claude-3-5-sonnet-latest",
+    max_tokens=500,
+    messages=[
+        {"role": "user", "content": "Hello"}
+    ]
+)
+
+print(response.content[0].text)</code></pre>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X POST http://your-domain:3000/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [
+      {"role": "user", "content": "Hello"}
+    ],
+    "max_tokens": 500,
+    "temperature": 0.7
+  }'</code></pre>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">🔄 {{ t('stream_response') }}</h3>
+                                <p style="color: #666; margin-bottom: 15px;">{{ t('stream_desc') }}</p>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">Python - OpenAI SDK</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from openai import OpenAI
+
+client = OpenAI(
+    api_key="YOUR_API_TOKEN",
+    base_url="http://your-domain:3000/v1"
+)
+
+stream = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[{"role": "user", "content": "Write a poem"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="")</code></pre>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X POST http://your-domain:3000/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role": "user", "content": "Write a poem"}],
+    "stream": true
+  }'</code></pre>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">📊 {{ t('available_models') }}</h3>
+                                <p style="color: #666; margin-bottom: 15px;">{{ t('available_models_desc') }}</p>
+
+                                <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X GET http://your-domain:3000/v1/models \
+  -H "Authorization: Bearer YOUR_API_TOKEN"</code></pre>
+                            </div>
+
+                            <div style="margin-bottom: 30px;">
+                                <h3 style="color: #333; margin-bottom: 15px;">💰 {{ t('quota_info') }}</h3>
+                                <div style="background: #f0f9eb; padding: 15px; border-radius: 8px;">
+                                    <ul style="margin: 0; padding-left: 20px; color: #67c23a;">
+                                        <li>{{ t('quota_desc_1') }}</li>
+                                        <li>{{ t('quota_desc_2') }}</li>
+                                        <li>{{ t('quota_desc_3') }}</li>
+                                        <li>{{ t('quota_desc_4') }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Channels -->
+                    <div v-if="currentView === 'channels' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('channel_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreateChannel = true">{{ t('add_channel') }}</button>
+                            </div>
+
+                            <div v-if="showCreateChannel" class="sub-card">
+                                <h3>{{ t('add_channel') }}</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div class="form-item">
+                                        <label>{{ t('name') }}</label>
+                                        <input type="text" v-model="newChannel.name" :placeholder="t('channel_name_placeholder')">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('type') }}</label>
+                                        <select v-model="newChannel.type">
+                                            <option value="40">DeepSeek</option>
+                                            <option value="29">Moonshot</option>
+                                            <option value="31">MiniMax</option>
+                                            <option value="18">Anthropic</option>
+                                            <option value="28">Gemini</option>
+                                            <option value="1">OpenAI</option>
+                                            <option value="3">Azure</option>
+                                            <option value="19">Baidu</option>
+                                            <option value="20">Zhipu</option>
+                                            <option value="21">Ali</option>
+                                            <option value="27">Tencent</option>
+                                            <option value="34">Ollama</option>
+                                            <option value="23">Ai360</option>
+                                            <option value="30">Baichuan</option>
+                                            <option value="35">LingYiWanWu</option>
+                                            <option value="36">StepFun</option>
+                                            <option value="44">Doubao</option>
+                                            <option value="54">OpenAI Compatible</option>
+                                            <option value="55">Gemini Compatible</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('group') }}</label>
+                                        <input type="text" v-model="newChannel.group" placeholder="default">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('weight') }}</label>
+                                        <input type="number" v-model="newChannel.weight" placeholder="100">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('api_key') }}</label>
+                                        <input type="text" v-model="newChannel.key" placeholder="sk-...">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('base_url') }}</label>
+                                        <input type="text" v-model="newChannel.base_url" placeholder="https://api.example.com/v1">
+                                    </div>
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('models') }} ({{ t('comma_separated') }})</label>
+                                    <input type="text" v-model="newChannel.models" placeholder="model1,model2">
+                                </div>
+                                <button class="btn btn-success" @click="createChannel">{{ t('create') }}</button>
+                                <button class="btn btn-secondary" @click="showCreateChannel = false">{{ t('cancel') }}</button>
+                                <div v-if="channelError" class="error">{{ channelError }}</div>
+                            </div>
+
+                            <table style="width: 100%; table-layout: fixed;">
+                                <thead><tr>
+                                    <th style="width: 50px;">ID</th>
+                                    <th style="width: 100px;">{{ t('name') }}</th>
+                                    <th style="width: 80px;">{{ t('group') }}</th>
+                                    <th style="width: 60px;">{{ t('weight') }}</th>
+                                    <th style="width: 100px;">{{ t('type') }}</th>
+                                    <th style="width: 70px;">{{ t('status') }}</th>
+                                    <th style="width: 180px;">{{ t('base_url') }}</th>
+                                    <th style="width: 120px;">{{ t('models') }}</th>
+                                    <th style="width: 140px;">{{ t('action') }}</th>
+                                </tr></thead>
+                                <tbody>
+                                    <tr v-for="channel in channels" :key="channel.id">
+                                        <td>{{ channel.id }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.name }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.group }}</td>
+                                        <td>{{ channel.weight }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ getChannelTypeName(channel.type) }}</td>
+                                        <td><span :class="'status ' + (channel.status === 1 ? 'status-active' : 'status-disabled')">{{ channel.status === 1 ? t('enabled') : t('disabled') }}</span></td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.base_url }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.models }}</td>
+                                        <td>
+                                            <button class="btn btn-secondary" @click="editChannel(channel)" style="padding: 5px 10px; margin-right: 5px;">{{ t('edit') }}</button>
+                                            <button class="btn btn-danger" @click="deleteChannel(channel.id)" style="padding: 5px 10px;">{{ t('delete') }}</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Edit Channel Dialog -->
+                    <el-dialog v-model="showEditChannel" :title="t('edit_channel')" width="500px">
+                        <div style="padding: 10px 0;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="form-item">
+                                    <label>{{ t('name') }}</label>
+                                    <input type="text" v-model="editChannelData.name">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('type') }}</label>
+                                    <select v-model="editChannelData.type">
+                                        <option value="40">DeepSeek</option>
+                                        <option value="29">Moonshot</option>
+                                        <option value="31">MiniMax</option>
+                                        <option value="18">Anthropic</option>
+                                        <option value="28">Gemini</option>
+                                        <option value="1">OpenAI</option>
+                                        <option value="3">Azure</option>
+                                        <option value="19">Baidu</option>
+                                        <option value="20">Zhipu</option>
+                                        <option value="21">Ali</option>
+                                        <option value="27">Tencent</option>
+                                        <option value="34">Ollama</option>
+                                        <option value="23">Ai360</option>
+                                        <option value="30">Baichuan</option>
+                                        <option value="35">LingYiWanWu</option>
+                                        <option value="36">StepFun</option>
+                                        <option value="44">Doubao</option>
+                                        <option value="54">OpenAI Compatible</option>
+                                        <option value="55">Gemini Compatible</option>
+                                    </select>
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('group') }}</label>
+                                    <input type="text" v-model="editChannelData.group">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('weight') }}</label>
+                                    <input type="number" v-model="editChannelData.weight">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('status') }}</label>
+                                    <select v-model="editChannelData.status">
+                                        <option value="1">{{ t('enabled') }}</option>
+                                        <option value="0">{{ t('disabled') }}</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('api_key') }}</label>
+                                <input type="text" v-model="editChannelData.key">
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('base_url') }}</label>
+                                <input type="text" v-model="editChannelData.base_url">
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('models') }} ({{ t('comma_separated') }})</label>
+                                <input type="text" v-model="editChannelData.models">
+                            </div>
+                            <div v-if="channelError" class="error" style="margin-top: 10px;">{{ channelError }}</div>
+                        </div>
+                        <template #footer>
+                            <button class="btn btn-secondary" @click="showEditChannel = false">{{ t('cancel') }}</button>
+                            <button class="btn btn-primary" @click="doEditChannel">{{ t('save') }}</button>
+                        </template>
+                    </el-dialog>
+
+                    <!-- Groups -->
+                    <div v-if="currentView === 'groups' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('channel_group_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreateGroup = true">{{ t('add_group') }}</button>
+                            </div>
+                            <p style="color: #666; margin-bottom: 15px;">{{ t('group_desc') }}</p>
+
+                            <div v-if="showCreateGroup" class="sub-card">
+                                <h3>{{ t('add_group') }}</h3>
+                                <div class="form-item">
+                                    <label>{{ t('group_name') }}</label>
+                                    <input type="text" v-model="newGroupName" :placeholder="t('enter_group_name')">
+                                </div>
+                                <button class="btn btn-success" @click="createGroup">{{ t('create') }}</button>
+                                <button class="btn btn-secondary" @click="showCreateGroup = false; newGroupName = ''">{{ t('cancel') }}</button>
+                                <div v-if="groupError" class="error">{{ groupError }}</div>
+                            </div>
+
+                            <div v-if="showRenameGroup" class="sub-card">
+                                <h3>{{ t('rename_group') }}</h3>
+                                <div class="form-item">
+                                    <label>{{ t('old_name') }}</label>
+                                    <input type="text" v-model="renameGroupOld" disabled style="background: #e4e7ed;">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('new_name') }}</label>
+                                    <input type="text" v-model="renameGroupNew" :placeholder="t('enter_new_name')">
+                                </div>
+                                <button class="btn btn-success" @click="doRenameGroup">{{ t('save') }}</button>
+                                <button class="btn btn-secondary" @click="showRenameGroup = false; renameGroupOld = ''; renameGroupNew = ''">{{ t('cancel') }}</button>
+                                <div v-if="groupError" class="error">{{ groupError }}</div>
+                            </div>
+
+                            <div v-if="showDeleteGroup" class="sub-card">
+                                <h3>{{ t('delete_group') }}</h3>
+                                <p>{{ t('confirm_delete_group') }} "{{ deleteGroupName }}" ?</p>
+                                <div class="form-item">
+                                    <label>{{ t('channel_action') }}</label>
+                                    <select v-model="deleteGroupAction">
+                                        <option value="move">{{ t('move_to_default') }}</option>
+                                        <option value="delete">{{ t('delete_with_channels') }}</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-danger" @click="doDeleteGroup">{{ t('confirm_delete') }}</button>
+                                <button class="btn btn-secondary" @click="showDeleteGroup = false; deleteGroupName = ''">{{ t('cancel') }}</button>
+                                <div v-if="groupError" class="error">{{ groupError }}</div>
+                            </div>
+
+                            <table>
+                                <thead><tr><th>{{ t('group_name') }}</th><th>{{ t('total_channels') }}</th><th>{{ t('enabled') }}</th><th>{{ t('disabled') }}</th><th>{{ t('action') }}</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="group in channelGroups" :key="group.name">
+                                        <td>{{ group.name }}</td>
+                                        <td>{{ group.total }}</td>
+                                        <td><span class="status status-active">{{ group.enabled }}</span></td>
+                                        <td><span class="status status-disabled">{{ group.disabled }}</span></td>
+                                        <td>
+                                            <button class="btn btn-secondary" @click="viewGroupChannels(group.name)" style="padding: 5px 10px;">{{ t('view') }}</button>
+                                            <button class="btn btn-secondary" @click="showRenameGroup = true; renameGroupOld = group.name" style="padding: 5px 10px;">{{ t('rename') }}</button>
+                                            <button v-if="group.name !== 'default'" class="btn btn-danger" @click="showDeleteGroup = true; deleteGroupName = group.name" style="padding: 5px 10px;">{{ t('delete') }}</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div v-if="selectedGroupChannels.length > 0" style="margin-top: 20px;">
+                                <h3 style="margin-bottom: 10px;">{{ t('channels_in_group') }} "{{ selectedGroup }}"</h3>
+                                <table>
+                                    <thead><tr><th>ID</th><th>{{ t('name') }}</th><th>{{ t('weight') }}</th><th>{{ t('status') }}</th><th>{{ t('models') }}</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="ch in selectedGroupChannels" :key="ch.id">
+                                            <td>{{ ch.id }}</td>
+                                            <td>{{ ch.name }}</td>
+                                            <td>{{ ch.weight }}</td>
+                                            <td><span :class="'status ' + (ch.status === 1 ? 'status-active' : 'status-disabled')">{{ ch.status === 1 ? t('enabled') : t('disabled') }}</span></td>
+                                            <td>{{ ch.models }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Users -->
+                    <div v-if="currentView === 'users' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('user_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreateUser = true">{{ t('add_user') }}</button>
+                            </div>
+
+                            <div v-if="showCreateUser" class="sub-card">
+                                <h3>{{ t('add_user') }}</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div class="form-item">
+                                        <label>{{ t('username') }}</label>
+                                        <input type="text" v-model="newUser.username" placeholder="username">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('password') }}</label>
+                                        <input type="password" v-model="newUser.password" placeholder="password">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('display_name') }}</label>
+                                        <input type="text" v-model="newUser.display_name" placeholder="Display Name">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('role') }}</label>
+                                        <select v-model="newUser.role">
+                                            <option value="1">{{ t('role_common') }}</option>
+                                            <option value="10">{{ t('role_admin') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('channel_group') }}</label>
+                                        <select v-model="newUser.group">
+                                            <option v-for="g in channelGroups" :key="g" :value="g">{{ g }}</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button class="btn btn-success" @click="createUser">{{ t('create') }}</button>
+                                <button class="btn btn-secondary" @click="showCreateUser = false">{{ t('cancel') }}</button>
+                                <div v-if="userError" class="error">{{ userError }}</div>
+                            </div>
+
+                            <table style="width: 100%; table-layout: fixed;">
+                                <thead><tr>
+                                    <th style="width: 50px;">ID</th>
+                                    <th style="width: 100px;">{{ t('username') }}</th>
+                                    <th style="width: 100px;">{{ t('display_name') }}</th>
+                                    <th style="width: 80px;">{{ t('role') }}</th>
+                                    <th style="width: 80px;">{{ t('group') }}</th>
+                                    <th style="width: 70px;">{{ t('status') }}</th>
+                                    <th style="width: 80px;">{{ t('quota') }}</th>
+                                    <th style="width: 220px;">{{ t('action') }}</th>
+                                </tr></thead>
+                                <tbody>
+                                    <tr v-for="user in users" :key="user.id">
+                                        <td>{{ user.id }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ user.username }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ user.display_name }}</td>
+                                        <td>{{ getRoleName(user.role) }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ user.group || 'default' }}</td>
+                                        <td><span :class="'status ' + (user.status === 1 ? 'status-active' : 'status-disabled')">{{ user.status === 1 ? t('normal') : t('disabled') }}</span></td>
+                                        <td>{{ formatQuota(user.quota) }}</td>
+                                        <td>
+                                            <button class="btn btn-secondary" @click="editUser(user)" style="padding: 5px 10px; margin-right: 5px;">{{ t('edit') }}</button>
+                                            <button class="btn btn-secondary" @click="showResetPassword(user)" style="padding: 5px 10px; margin-right: 5px;">{{ t('reset_password') }}</button>
+                                            <button class="btn btn-danger" @click="deleteUser(user.id)" style="padding: 5px 10px;">{{ t('delete') }}</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Reset Password Dialog -->
+                    <el-dialog v-model="showResetPwDialog" :title="t('reset_user_password')" width="400px">
+                        <div style="padding: 10px 0;">
+                            <p style="margin-bottom: 15px;">{{ t('reset_password_for') }}: <strong>{{ resetPwUser?.username }}</strong></p>
+                            <div class="form-item">
+                                <label>{{ t('new_password') }} ({{ t('min_8_chars') }})</label>
+                                <input type="password" v-model="resetPwNewPass" :placeholder="t('enter_new_password')" @keyup.enter="doResetPassword">
+                            </div>
+                            <div v-if="resetPwError" class="error" style="margin-top: 10px;">{{ resetPwError }}</div>
+                        </div>
+                        <template #footer>
+                            <button class="btn btn-secondary" @click="showResetPwDialog = false">{{ t('cancel') }}</button>
+                            <button class="btn btn-primary" @click="doResetPassword">{{ t('confirm_reset') }}</button>
+                        </template>
+                    </el-dialog>
+
+                    <!-- Edit User Dialog -->
+                    <el-dialog v-model="showEditUser" :title="t('edit_user')" width="450px">
+                        <div style="padding: 10px 0;">
+                            <div class="form-item">
+                                <label>{{ t('username') }}</label>
+                                <input type="text" v-model="editUserData.username" disabled style="background: #e4e7ed;">
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('display_name') }}</label>
+                                <input type="text" v-model="editUserData.display_name">
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('role') }}</label>
+                                <select v-model="editUserData.role">
+                                    <option value="1">{{ t('role_common') }}</option>
+                                    <option value="10">{{ t('role_admin') }}</option>
+                                </select>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('channel_group') }}</label>
+                                <select v-model="editUserData.group">
+                                    <option v-for="g in channelGroups" :key="g" :value="g">{{ g }}</option>
+                                </select>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('status') }}</label>
+                                <select v-model="editUserData.status">
+                                    <option value="1">{{ t('normal') }}</option>
+                                    <option value="0">{{ t('disabled') }}</option>
+                                </select>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('quota') }}</label>
+                                <input type="number" v-model="editUserData.quota">
+                            </div>
+                            <div v-if="userError" class="error" style="margin-top: 10px;">{{ userError }}</div>
+                        </div>
+                        <template #footer>
+                            <button class="btn btn-secondary" @click="showEditUser = false">{{ t('cancel') }}</button>
+                            <button class="btn btn-primary" @click="doEditUser">{{ t('save') }}</button>
+                        </template>
+                    </el-dialog>
+
+                    <!-- Redemptions -->
+                    <div v-if="currentView === 'redemptions' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('redemption_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreateRedemption = true">{{ t('generate_code') }}</button>
+                            </div>
+
+                            <div v-if="showCreateRedemption" class="sub-card">
+                                <h3>{{ t('generate_code') }}</h3>
+                                <div class="form-item">
+                                    <label>{{ t('name') }}</label>
+                                    <input type="text" v-model="newRedemption.name" :placeholder="t('redemption_name_placeholder')">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('quota') }}</label>
+                                    <input type="number" v-model="newRedemption.quota" placeholder="1000000">
+                                </div>
+                                <button class="btn btn-success" @click="createRedemption">{{ t('generate') }}</button>
+                                <button class="btn btn-secondary" @click="showCreateRedemption = false">{{ t('cancel') }}</button>
+                                <div v-if="redemptionError" class="error">{{ redemptionError }}</div>
+                            </div>
+
+                            <table>
+                                <thead><tr><th>ID</th><th>{{ t('name') }}</th><th>{{ t('key') }}</th><th>{{ t('quota') }}</th><th>{{ t('status') }}</th><th>{{ t('created_at') }}</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="redemption in redemptions" :key="redemption.id">
+                                        <td>{{ redemption.id }}</td>
+                                        <td>{{ redemption.name }}</td>
+                                        <td><span class="api-key-display">{{ redemption.key }}</span></td>
+                                        <td>{{ formatQuota(redemption.quota) }}</td>
+                                        <td><span :class="'status ' + (redemption.status === 1 ? 'status-active' : (redemption.status === 3 ? 'status-disabled' : 'status-inactive'))">
+                                            {{ redemption.status === 1 ? t('available') : (redemption.status === 3 ? t('used') : t('disabled')) }}
+                                        </span></td>
+                                        <td>{{ formatTime(redemption.created_time) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Packages -->
+                    <div v-if="currentView === 'packages' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('package_management') }}</span>
+                                <button class="btn btn-primary" @click="showCreatePackage = true">{{ t('create_package') }}</button>
+                            </div>
+
+                            <div v-if="showCreatePackage" class="sub-card">
+                                <h3>{{ t('create_package') }}</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div class="form-item">
+                                        <label>{{ t('name') }}</label>
+                                        <input type="text" v-model="newPackage.name" :placeholder="t('package_name_placeholder')">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('type') }}</label>
+                                        <select v-model="newPackage.package_type">
+                                            <option value="prepaid">{{ t('prepaid') }}</option>
+                                            <option value="monthly">{{ t('monthly') }}</option>
+                                            <option value="once">{{ t('one_time') }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('quota') }}</label>
+                                        <input type="number" v-model="newPackage.quota" placeholder="1000000">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('price') }} (JSON)</label>
+                                        <input type="text" v-model="newPackage.prices" placeholder='{"USD": 19.99}'>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('duration_days') }} (-1: {{ t('permanent') }})</label>
+                                        <input type="number" v-model="newPackage.duration_days" placeholder="-1">
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('sort_order') }}</label>
+                                        <input type="number" v-model="newPackage.sort_order" placeholder="0">
+                                    </div>
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('payment_methods') }} ({{ t('comma_separated') }})</label>
+                                    <input type="text" v-model="newPackage.payment_providers" placeholder="stripe,paypal">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('description') }}</label>
+                                    <textarea v-model="newPackage.description" :placeholder="t('package_desc_placeholder')"></textarea>
+                                </div>
+                                <button class="btn btn-success" @click="createPackage">{{ t('create') }}</button>
+                                <button class="btn btn-secondary" @click="showCreatePackage = false">{{ t('cancel') }}</button>
+                                <div v-if="packageError" class="error">{{ packageError }}</div>
+                            </div>
+
+                            <table style="width: 100%; table-layout: fixed;">
+                                <thead><tr>
+                                    <th style="width: 50px;">ID</th>
+                                    <th style="width: 120px;">{{ t('name') }}</th>
+                                    <th style="width: 80px;">{{ t('type') }}</th>
+                                    <th style="width: 80px;">{{ t('quota') }}</th>
+                                    <th style="width: 100px;">{{ t('price') }}</th>
+                                    <th style="width: 70px;">{{ t('status') }}</th>
+                                    <th style="width: 60px;">{{ t('sort_order') }}</th>
+                                    <th style="width: 140px;">{{ t('action') }}</th>
+                                </tr></thead>
+                                <tbody>
+                                    <tr v-for="pkg in packages" :key="pkg.id">
+                                        <td>{{ pkg.id }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ pkg.name }}</td>
+                                        <td>{{ pkg.package_type }}</td>
+                                        <td>{{ formatQuota(pkg.quota) }}</td>
+                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ pkg.prices }}</td>
+                                        <td><span :class="'status ' + (pkg.status === 1 ? 'status-active' : 'status-disabled')">
+                                            {{ pkg.status === 1 ? t('enabled') : t('disabled') }}
+                                        </span></td>
+                                        <td>{{ pkg.sort_order }}</td>
+                                        <td>
+                                            <button class="btn btn-secondary" @click="editPackage(pkg)" style="padding: 5px 10px; margin-right: 5px;">{{ t('edit') }}</button>
+                                            <button class="btn btn-danger" @click="deletePackage(pkg.id)" style="padding: 5px 10px;">{{ t('delete') }}</button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Edit Package Dialog -->
+                    <el-dialog v-model="showEditPackage" :title="t('edit_package')" width="500px">
+                        <div style="padding: 10px 0;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div class="form-item">
+                                    <label>{{ t('name') }}</label>
+                                    <input type="text" v-model="editPackageData.name">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('type') }}</label>
+                                    <select v-model="editPackageData.package_type">
+                                        <option value="prepaid">{{ t('prepaid') }}</option>
+                                        <option value="monthly">{{ t('monthly') }}</option>
+                                        <option value="once">{{ t('one_time') }}</option>
+                                    </select>
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('quota') }}</label>
+                                    <input type="number" v-model="editPackageData.quota">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('price') }} (JSON)</label>
+                                    <input type="text" v-model="editPackageData.prices">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('duration_days') }} (-1: {{ t('permanent') }})</label>
+                                    <input type="number" v-model="editPackageData.duration_days">
+                                </div>
+                                <div class="form-item">
+                                    <label>{{ t('sort_order') }}</label>
+                                    <input type="number" v-model="editPackageData.sort_order">
+                                </div>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('payment_methods') }} ({{ t('comma_separated') }})</label>
+                                <input type="text" v-model="editPackageData.payment_providers">
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('description') }}</label>
+                                <textarea v-model="editPackageData.description" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;"></textarea>
+                            </div>
+                            <div class="form-item">
+                                <label>{{ t('status') }}</label>
+                                <select v-model="editPackageData.status">
+                                    <option value="1">{{ t('enabled') }}</option>
+                                    <option value="0">{{ t('disabled') }}</option>
+                                </select>
+                            </div>
+                            <div v-if="packageError" class="error" style="margin-top: 10px;">{{ packageError }}</div>
+                        </div>
+                        <template #footer>
+                            <button class="btn btn-secondary" @click="showEditPackage = false">{{ t('cancel') }}</button>
+                            <button class="btn btn-primary" @click="doEditPackage">{{ t('save') }}</button>
+                        </template>
+                    </el-dialog>
+
+                    <!-- Orders -->
+                    <div v-if="currentView === 'orders' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('order_management') }}</span>
+                            </div>
+                            <div class="stats-grid stats-grid-3" style="margin-bottom: 20px;">
+                                <div class="stat-card">
+                                    <div class="stat-value">{{ orderStats.total || 0 }}</div>
+                                    <div class="stat-label">{{ t('total_orders') }}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" style="color: #e6a23c;">{{ orderStats.pending || 0 }}</div>
+                                    <div class="stat-label">{{ t('pending') }}</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div class="stat-value" style="color: #67c23a;">{{ orderStats.paid || 0 }}</div>
+                                    <div class="stat-label">{{ t('paid') }}</div>
+                                </div>
+                            </div>
+
+                            <table>
+                                <thead><tr><th>ID</th><th>{{ t('order_no') }}</th><th>{{ t('user_id') }}</th><th>{{ t('package_id') }}</th><th>{{ t('payment_method') }}</th><th>{{ t('amount') }}</th><th>{{ t('status') }}</th><th>{{ t('created_at') }}</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="order in allOrders" :key="order.id">
+                                        <td>{{ order.id }}</td>
+                                        <td><span class="api-key-display">{{ order.order_no }}</span></td>
+                                        <td>{{ order.user_id }}</td>
+                                        <td>{{ order.package_id }}</td>
+                                        <td>{{ order.payment_provider }}</td>
+                                        <td>{{ order.amount }} {{ order.currency }}</td>
+                                        <td><span :style="{ color: getOrderStatusColor(order.status) }">{{ order.status }}</span></td>
+                                        <td>{{ formatTime(order.created_time) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Logs -->
+                    <div v-if="currentView === 'logs' && isAdmin">
+                        <div class="card">
+                            <div class="card-header">
+                                <span class="card-title">{{ t('usage_logs') }}</span>
+                                <button class="btn btn-danger" @click="deleteOldLogs" style="padding: 5px 15px; margin-left: auto;">{{ t('clear_old_logs') }}</button>
+                            </div>
+                            <table>
+                                <thead><tr><th>ID</th><th>{{ t('time') }}</th><th>{{ t('user') }}</th><th>{{ t('model') }}</th><th>{{ t('quota_used') }}</th><th>{{ t('token_name') }}</th><th>{{ t('elapsed') }}</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="log in allLogs" :key="log.id">
+                                        <td>{{ log.id }}</td>
+                                        <td>{{ formatTime(log.created_at) }}</td>
+                                        <td>{{ log.username }}</td>
+                                        <td>{{ log.model_name }}</td>
+                                        <td>{{ log.quota }}</td>
+                                        <td>{{ log.token_name }}</td>
+                                        <td>{{ log.elapsed_time }}ms</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                                <button class="btn btn-secondary" @click="logsPage > 0 && loadAllLogs(logsPage - 1)" :disabled="logsPage <= 0">{{ t('prev_page') }}</button>
+                                <span>{{ t('page') }} {{ logsPage + 1 }}</span>
+                                <button class="btn btn-secondary" @click="loadAllLogs(logsPage + 1)">{{ t('next_page') }}</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="background: #fff; padding: 20px; margin-top: 20px; border-top: 1px solid #eee;">
+                    <div style="max-width: 1200px; margin: 0 auto; text-align: center;">
+                        <div style="margin-bottom: 10px; color: #666; font-size: 13px;">
+                            {{ t('powered_by') }} <a href="https://github.com/kandada/llmapi" target="_blank" style="color: #409eff; text-decoration: none;">llmapi</a>
+                        </div>
+                        <div style="color: #999; font-size: 12px;">
+                            {{ t('author') }}：xiefujin | {{ t('email') }}：490021684@qq.com | GitHub：<a href="https://github.com/kandada/llmapi" target="_blank" style="color: #999;">github.com/kandada/llmapi</a>
+                        </div>
+                        <div style="color: #c0c4cc; font-size: 11px; margin-top: 10px;">
+                            {{ t('disclaimer') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        const app = createApp({
+            setup() {
+                const apiBase = '';
+                const currentView = ref('dashboard');
+                const isLoggedIn = ref(false);
+                const isAdmin = ref(false);
+                const loading = ref(false);
+                const userInfo = ref({});
+                const userToken = ref('');
+                const tokens = ref([]);
+                const channels = ref([]);
+                const users = ref([]);
+                const redemptions = ref([]);
+                const recentLogs = ref([]);
+                const redeemCode = ref('');
+                const redeemMsg = ref({});
+                const redeeming = ref(false);
+                const allLogs = ref([]);
+                const logsPage = ref(0);
+
+                const currentLang = ref('zh');
+                const translations = ref({});
+
+                const t = (key) => {
+                    return translations.value[key] || key;
+                };
+
+                const loadI18n = async (lang) => {
+                    const result = await api('GET', `/api/i18n/${lang}`);
+                    if (result?.success) {
+                        translations.value = result.data;
+                        currentLang.value = lang;
+                    }
+                };
+
+                const setLanguage = async (lang) => {
+                    if (isLoggedIn.value) {
+                        try {
+                            await api('POST', '/api/i18n/set-language', { lang });
+                        } catch (e) {}
+                    }
+                    await loadI18n(lang);
+                };
+
+                const loginForm = ref({ username: '', password: '' });
+                const loginError = ref('');
+
+                const showCreateToken = ref(false);
+                const newToken = ref({ name: '', remain_quota: 1000000, expired_time: -1, channel_group: '' });
+                const tokenError = ref('');
+
+                const showCreateChannel = ref(false);
+                const newChannel = ref({ name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100 });
+                const channelError = ref('');
+                const showEditChannel = ref(false);
+                const editChannelData = ref({ id: null, name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100, status: 1 });
+
+                const channelGroups = ref([]);
+                const selectedGroup = ref('');
+                const selectedGroupChannels = ref([]);
+
+                const showCreateGroup = ref(false);
+                const newGroupName = ref('');
+                const showRenameGroup = ref(false);
+                const renameGroupOld = ref('');
+                const renameGroupNew = ref('');
+                const showDeleteGroup = ref(false);
+                const deleteGroupName = ref('');
+                const deleteGroupAction = ref('move');
+                const groupError = ref('');
+
+                const showCreateUser = ref(false);
+                const newUser = ref({ username: '', password: '', display_name: '', role: 1, group: 'default' });
+                const userError = ref('');
+                const showEditUser = ref(false);
+                const editUserData = ref({ id: null, username: '', display_name: '', role: 1, group: 'default', status: 1, quota: 0 });
+
+                const showResetPwDialog = ref(false);
+                const resetPwUser = ref(null);
+                const resetPwNewPass = ref('');
+                const resetPwError = ref('');
+
+                const showCreateRedemption = ref(false);
+                const newRedemption = ref({ name: '', quota: 1000000 });
+                const redemptionError = ref('');
+
+                const showCreatePackage = ref(false);
+                const newPackage = ref({ name: '', description: '', package_type: 'prepaid', quota: 1000000, prices: '{"USD": 19.99}', duration_days: -1, payment_providers: 'stripe', sort_order: 0 });
+                const packageError = ref('');
+                const showEditPackage = ref(false);
+                const editPackageData = ref({ id: null, name: '', description: '', package_type: 'prepaid', quota: 1000000, prices: '{"USD": 19.99}', duration_days: -1, payment_providers: 'stripe', sort_order: 0, status: 1 });
+                const packages = ref([]);
+                const allOrders = ref([]);
+                const orderStats = ref({});
+
+                const viewNames = {
+                    dashboard: 'dashboard',
+                    tokens: 'api_tokens',
+                    shop: 'shop',
+                    apidoc: 'api_usage',
+                    channels: 'channel_management',
+                    groups: 'channel_groups',
+                    packages: 'package_management',
+                    orders: 'order_management',
+                    users: 'user_management',
+                    redemptions: 'redemption_codes',
+                    logs: 'usage_logs'
+                };
+
+                const getViewName = () => t(viewNames[currentView.value]) || '';
+
+                const api = async (method, path, data = null) => {
+                    const options = {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                    };
+                    if (data) options.body = JSON.stringify(data);
+                    const response = await fetch(apiBase + path, options);
+                    if (response.status === 401) {
+                        isLoggedIn.value = false;
+                        currentView.value = 'dashboard';
+                        return null;
+                    }
+                    return response.json();
+                };
+
+                const login = async () => {
+                    loading.value = true;
+                    loginError.value = '';
+                    const result = await api('POST', '/api/user/login', loginForm.value);
+                    loading.value = false;
+                    if (result?.success) {
+                        userInfo.value = result.data;
+                        isLoggedIn.value = true;
+                        isAdmin.value = userInfo.value.role >= 10;
+                        currentView.value = 'dashboard';
+                        await loadUserToken();
+                        await loadTokens();
+                        await loadRecentLogs();
+                        if (isAdmin.value) {
+                            await loadChannels();
+                            await loadChannelGroups();
+                            await loadPackages();
+                            await loadAllOrders();
+                            await loadUsers();
+                            await loadRedemptions();
+                            await loadAllLogs();
+                        }
+                    } else if (result) {
+                        loginError.value = result.message || t('login_failed');
+                    }
+                };
+
+                const logout = async () => {
+                    await api('GET', '/api/user/logout');
+                    isLoggedIn.value = false;
+                    isAdmin.value = false;
+                    userInfo.value = {};
+                    userToken.value = '';
+                    loginForm.value = { username: '', password: '' };
+                    currentView.value = 'dashboard';
+                };
+
+                const redeemCodeFn = async () => {
+                    if (!redeemCode.value.trim()) {
+                        redeemMsg.value = { type: 'error', text: t('enter_redeem_code') };
+                        return;
+                    }
+                    redeeming.value = true;
+                    redeemMsg.value = {};
+                    const result = await api('POST', '/api/user/topup', { key: redeemCode.value.trim() });
+                    redeeming.value = false;
+                    if (result?.success) {
+                        redeemMsg.value = { type: 'success', text: t('redeem_success') + ' ' + result.data.quota + ' ' + t('quota') };
+                        redeemCode.value = '';
+                        await loadUserInfo();
+                        await loadUserToken();
+                    } else {
+                        redeemMsg.value = { type: 'error', text: result.message || t('redeem_failed') };
+                    }
+                };
+
+                const loadUserToken = async () => {
+                    const result = await api('GET', '/api/user/token');
+                    if (result?.success) userToken.value = result.data;
+                };
+
+                const loadTokens = async () => {
+                    const result = await api('GET', '/api/token/');
+                    if (result?.success) tokens.value = result.data;
+                };
+
+                const createToken = async () => {
+                    tokenError.value = '';
+                    const result = await api('POST', '/api/token/', {
+                        name: newToken.value.name,
+                        remain_quota: parseInt(newToken.value.remain_quota) || 1000000,
+                        expired_time: parseInt(newToken.value.expired_time) || -1,
+                        unlimited_quota: parseInt(newToken.value.remain_quota) === -1,
+                        channel_group: newToken.value.channel_group || ''
+                    });
+                    if (result?.success) {
+                        showCreateToken.value = false;
+                        newToken.value = { name: '', remain_quota: 1000000, expired_time: -1, channel_group: '' };
+                        await loadTokens();
+                        await loadUserToken();
+                    } else if (result) {
+                        tokenError.value = result.message || t('create_failed');
+                    }
+                };
+
+                const deleteToken = async (id) => {
+                    if (!confirm(t('confirm_delete_token'))) return;
+                    const result = await api('DELETE', '/api/token/' + id);
+                    if (result?.success) await loadTokens();
+                };
+
+                const loadChannels = async () => {
+                    const result = await api('GET', '/api/channel/');
+                    if (result?.success) channels.value = result.data;
+                };
+
+                const createChannel = async () => {
+                    channelError.value = '';
+                    const result = await api('POST', '/api/channel/', {
+                        name: newChannel.value.name,
+                        type: parseInt(newChannel.value.type),
+                        key: newChannel.value.key,
+                        base_url: newChannel.value.base_url,
+                        models: newChannel.value.models,
+                        group: newChannel.value.group || 'default',
+                        weight: parseInt(newChannel.value.weight) || 100,
+                        status: 1
+                    });
+                    if (result?.success) {
+                        showCreateChannel.value = false;
+                        newChannel.value = { name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100 };
+                        await loadChannels();
+                        await loadChannelGroups();
+                    } else if (result) {
+                        channelError.value = result.message || t('create_failed');
+                    }
+                };
+
+                const editChannel = (channel) => {
+                    editChannelData.value = {
+                        id: channel.id,
+                        name: channel.name,
+                        type: String(channel.type),
+                        key: channel.key || '',
+                        base_url: channel.base_url || '',
+                        models: channel.models || '',
+                        group: channel.group || 'default',
+                        weight: channel.weight || 100,
+                        status: channel.status || 1
+                    };
+                    showEditChannel.value = true;
+                };
+
+                const doEditChannel = async () => {
+                    channelError.value = '';
+                    const result = await api('PUT', '/api/channel/' + editChannelData.value.id, {
+                        name: editChannelData.value.name,
+                        type: parseInt(editChannelData.value.type),
+                        key: editChannelData.value.key,
+                        base_url: editChannelData.value.base_url,
+                        models: editChannelData.value.models,
+                        group: editChannelData.value.group || 'default',
+                        weight: parseInt(editChannelData.value.weight) || 100,
+                        status: parseInt(editChannelData.value.status)
+                    });
+                    if (result?.success) {
+                        showEditChannel.value = false;
+                        await loadChannels();
+                        await loadChannelGroups();
+                    } else if (result) {
+                        channelError.value = result.message || t('update_failed');
+                    }
+                };
+
+                const deleteChannel = async (id) => {
+                    if (!confirm(t('confirm_delete_channel'))) return;
+                    const result = await api('DELETE', '/api/channel/' + id);
+                    if (result?.success) {
+                        await loadChannels();
+                        await loadChannelGroups();
+                    }
+                };
+
+                const loadChannelGroups = async () => {
+                    const result = await api('GET', '/api/channel/group/');
+                    if (result?.success) channelGroups.value = result.data;
+                };
+
+                const viewGroupChannels = async (group) => {
+                    selectedGroup.value = group;
+                    const result = await api('GET', '/api/channel/group/' + group);
+                    if (result?.success) selectedGroupChannels.value = result.data;
+                };
+
+                const createGroup = async () => {
+                    groupError.value = '';
+                    if (!newGroupName.value || newGroupName.value.length > 32) {
+                        groupError.value = t('invalid_group_name');
+                        return;
+                    }
+                    showCreateGroup.value = false;
+                    newGroupName.value = '';
+                    await loadChannelGroups();
+                };
+
+                const doRenameGroup = async () => {
+                    groupError.value = '';
+                    if (!renameGroupNew.value || renameGroupNew.value.length > 32) {
+                        groupError.value = t('invalid_new_name');
+                        return;
+                    }
+                    const result = await api('PUT', `/api/channel/group/?old_group=${encodeURIComponent(renameGroupOld.value)}&new_group=${encodeURIComponent(renameGroupNew.value)}`);
+                    if (result?.success) {
+                        showRenameGroup.value = false;
+                        renameGroupOld.value = '';
+                        renameGroupNew.value = '';
+                        await loadChannelGroups();
+                    } else {
+                        groupError.value = result.message || t('rename_failed');
+                    }
+                };
+
+                const doDeleteGroup = async () => {
+                    groupError.value = '';
+                    const moveTo = deleteGroupAction.value === 'move' ? 'default' : '';
+                    const result = await api('DELETE', `/api/channel/group/${encodeURIComponent(deleteGroupName.value)}?move_to=${moveTo}`);
+                    if (result?.success) {
+                        showDeleteGroup.value = false;
+                        deleteGroupName.value = '';
+                        await loadChannelGroups();
+                    } else {
+                        groupError.value = result.message || t('delete_failed');
+                    }
+                };
+
+                const loadUsers = async () => {
+                    const result = await api('GET', '/api/user/');
+                    if (result?.success) users.value = result.data;
+                };
+
+                const createUser = async () => {
+                    userError.value = '';
+                    const result = await api('POST', '/api/user/', newUser.value);
+                    if (result?.success) {
+                        showCreateUser.value = false;
+                        newUser.value = { username: '', password: '', display_name: '', role: 1, group: 'default' };
+                        await loadUsers();
+                    } else if (result) {
+                        userError.value = result.message || t('create_failed');
+                    }
+                };
+
+                const editUser = (user) => {
+                    editUserData.value = {
+                        id: user.id,
+                        username: user.username,
+                        display_name: user.display_name || '',
+                        role: user.role,
+                        group: user.group || 'default',
+                        status: user.status,
+                        quota: user.quota
+                    };
+                    showEditUser.value = true;
+                };
+
+                const doEditUser = async () => {
+                    userError.value = '';
+                    const result = await api('PUT', '/api/user/' + editUserData.value.id, {
+                        display_name: editUserData.value.display_name,
+                        role: parseInt(editUserData.value.role),
+                        group: editUserData.value.group,
+                        status: parseInt(editUserData.value.status),
+                        quota: parseInt(editUserData.value.quota)
+                    });
+                    if (result?.success) {
+                        showEditUser.value = false;
+                        await loadUsers();
+                    } else if (result) {
+                        userError.value = result.message || t('update_failed');
+                    }
+                };
+
+                const deleteUser = async (id) => {
+                    if (!confirm(t('confirm_delete_user'))) return;
+                    const result = await api('DELETE', '/api/user/' + id);
+                    if (result?.success) await loadUsers();
+                };
+
+                const showResetPassword = (user) => {
+                    resetPwUser.value = user;
+                    resetPwNewPass.value = '';
+                    resetPwError.value = '';
+                    showResetPwDialog.value = true;
+                };
+
+                const doResetPassword = async () => {
+                    resetPwError.value = '';
+                    if (!resetPwNewPass.value || resetPwNewPass.value.length < 8) {
+                        resetPwError.value = t('password_min_8');
+                        return;
+                    }
+                    const result = await api('POST', `/api/user/${resetPwUser.value.id}/reset-password`, {
+                        new_password: resetPwNewPass.value
+                    });
+                    if (result?.success) {
+                        showResetPwDialog.value = false;
+                        resetPwUser.value = null;
+                        resetPwNewPass.value = '';
+                    } else {
+                        resetPwError.value = result.message || t('reset_failed');
+                    }
+                };
+
+                const loadRedemptions = async () => {
+                    const result = await api('GET', '/api/redemption/');
+                    if (result?.success) redemptions.value = result.data;
+                };
+
+                const createRedemption = async () => {
+                    redemptionError.value = '';
+                    const result = await api('POST', '/api/redemption/', newRedemption.value);
+                    if (result?.success) {
+                        showCreateRedemption.value = false;
+                        newRedemption.value = { name: '', quota: 1000000 };
+                        await loadRedemptions();
+                    } else if (result) {
+                        redemptionError.value = result.message || t('create_failed');
+                    }
+                };
+
+                const loadPackages = async () => {
+                    const result = await api('GET', '/admin/package/');
+                    if (result?.success) packages.value = result.data;
+                };
+
+                const createPackage = async () => {
+                    packageError.value = '';
+                    try {
+                        const pkgData = { ...newPackage.value };
+                        if (typeof pkgData.prices === 'string') JSON.parse(pkgData.prices);
+                        const result = await api('POST', '/admin/package/', pkgData);
+                        if (result?.success) {
+                            showCreatePackage.value = false;
+                            newPackage.value = { name: '', description: '', package_type: 'prepaid', quota: 1000000, prices: '{"USD": 19.99}', duration_days: -1, payment_providers: 'stripe', sort_order: 0 };
+                            await loadPackages();
+                        } else if (result) {
+                            packageError.value = result.message || t('create_failed');
+                        }
+                    } catch (e) {
+                        packageError.value = t('invalid_price_json');
+                    }
+                };
+
+                const editPackage = (pkg) => {
+                    editPackageData.value = {
+                        id: pkg.id,
+                        name: pkg.name,
+                        description: pkg.description || '',
+                        package_type: pkg.package_type || 'prepaid',
+                        quota: pkg.quota,
+                        prices: pkg.prices || '{"USD": 19.99}',
+                        duration_days: pkg.duration_days || -1,
+                        payment_providers: pkg.payment_providers || 'stripe',
+                        sort_order: pkg.sort_order || 0,
+                        status: pkg.status || 1
+                    };
+                    showEditPackage.value = true;
+                };
+
+                const doEditPackage = async () => {
+                    packageError.value = '';
+                    try {
+                        const pkgData = { ...editPackageData.value };
+                        if (typeof pkgData.prices === 'string') JSON.parse(pkgData.prices);
+                        const result = await api('PUT', '/admin/package/' + editPackageData.value.id, pkgData);
+                        if (result?.success) {
+                            showEditPackage.value = false;
+                            await loadPackages();
+                        } else if (result) {
+                            packageError.value = result.message || t('update_failed');
+                        }
+                    } catch (e) {
+                        packageError.value = t('invalid_price_json');
+                    }
+                };
+
+                const deletePackage = async (id) => {
+                    if (!confirm(t('confirm_delete_package'))) return;
+                    const result = await api('DELETE', '/admin/package/' + id);
+                    if (result?.success) await loadPackages();
+                };
+
+                const loadAllOrders = async () => {
+                    const result = await api('GET', '/admin/order/');
+                    if (result?.success) allOrders.value = result.data;
+                    const statsResult = await api('GET', '/admin/order/stats');
+                    if (statsResult?.success) orderStats.value = statsResult.data;
+                };
+
+                const getOrderStatusColor = (status) => {
+                    const colors = { pending: '#e6a23c', paid: '#67c23a', cancelled: '#909399', refunded: '#f56c6c' };
+                    return colors[status] || '#909399';
+                };
+
+                const loadRecentLogs = async () => {
+                    const result = await api('GET', '/api/log/self');
+                    if (result?.success) recentLogs.value = result.data.slice(0, 10);
+                };
+
+                const loadAllLogs = async (page = 0) => {
+                    logsPage.value = page;
+                    const result = await api('GET', `/api/log/?p=${page}&limit=10`);
+                    if (result?.success) allLogs.value = result.data;
+                };
+
+                const deleteOldLogs = async () => {
+                    if (!confirm(t('confirm_clear_logs'))) return;
+                    const result = await api('DELETE', '/api/log/?days=30');
+                    if (result?.success) {
+                        alert(t('cleared_logs').replace('{count}', result.data.count));
+                        await loadAllLogs(0);
+                    } else {
+                        alert(t('clear_failed') + ': ' + (result?.message || t('unknown_error')));
+                    }
+                };
+
+                const formatQuota = (quota) => {
+                    if (!quota && quota !== 0) return '0';
+                    if (quota < 1000) return quota.toString();
+                    if (quota < 1000000) return (quota / 1000).toFixed(1) + 'K';
+                    if (quota < 1000000000) return (quota / 1000000).toFixed(1) + 'M';
+                    return (quota / 1000000000).toFixed(1) + 'B';
+                };
+
+                const formatTime = (timestamp) => {
+                    if (!timestamp) return '';
+                    return new Date(timestamp * 1000).toLocaleString('zh-CN');
+                };
+
+                const getRoleName = (role) => {
+                    if (role >= 100) return t('role_root');
+                    if (role >= 10) return t('role_admin');
+                    return t('role_common');
+                };
+
+                const getChannelTypeName = (type) => {
+                    const types = { 1: 'OpenAI', 3: 'Azure', 18: 'Anthropic', 28: 'Gemini', 29: 'Moonshot', 31: 'MiniMax', 40: 'DeepSeek', 19: 'Baidu', 20: 'Zhipu', 21: 'Ali', 27: 'Tencent', 34: 'Ollama', 23: 'Ai360', 30: 'Baichuan', 35: 'LingYiWanWu', 36: 'StepFun', 44: 'Doubao', 54: 'OpenAI Compatible', 55: 'Gemini Compatible' };
+                    return types[type] || 'Unknown';
+                };
+
+                onMounted(async () => {
+                    await loadI18n('en');
+                    const result = await api('GET', '/api/user/self');
+                    if (result?.success) {
+                        userInfo.value = result.data;
+                        isLoggedIn.value = true;
+                        isAdmin.value = userInfo.value.role >= 10;
+                        currentView.value = 'dashboard';
+                        await loadUserToken();
+                        await loadTokens();
+                        await loadRecentLogs();
+                        if (isAdmin.value) {
+                            await loadChannels();
+                            await loadChannelGroups();
+                            await loadPackages();
+                            await loadAllOrders();
+                            await loadUsers();
+                            await loadRedemptions();
+                            await loadAllLogs();
+                        }
+                    }
+                });
+
+                return {
+                    currentView, isLoggedIn, isAdmin, loading, userInfo, userToken, tokens, channels, users, redemptions, recentLogs, allLogs,
+                    channelGroups, selectedGroup, selectedGroupChannels, showCreateGroup, newGroupName, showRenameGroup, renameGroupOld, renameGroupNew,
+                    showDeleteGroup, deleteGroupName, deleteGroupAction, groupError, loginForm, loginError,
+                    showCreateToken, newToken, tokenError, showCreateChannel, newChannel, channelError,
+                    showEditChannel, editChannelData, editChannel, doEditChannel,
+                    showCreateUser, newUser, userError, showEditUser, editUserData, editUser, doEditUser,
+                    showCreateRedemption, newRedemption, redemptionError,
+                    showCreatePackage, newPackage, packageError, showEditPackage, editPackageData, editPackage, doEditPackage,
+                    packages, allOrders, orderStats,
+                    redeemCode, redeemMsg, redeeming,
+                    login, logout, createToken, deleteToken, createChannel, deleteChannel, createUser, deleteUser,
+                    showResetPassword, doResetPassword, createRedemption, redeemCodeFn,
+                    formatQuota, formatTime, getRoleName, getChannelTypeName, getOrderStatusColor, getViewName,
+                    loadChannels, loadUsers, loadRedemptions, loadAllLogs, loadChannelGroups, viewGroupChannels,
+                    createGroup, doRenameGroup, doDeleteGroup, loadPackages, createPackage, deletePackage, loadAllOrders,
+                    logsPage, deleteOldLogs,
+                    t, currentLang, setLanguage, showResetPwDialog, resetPwUser, resetPwNewPass, resetPwError
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>

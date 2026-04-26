@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Purchase Tokens - LLM API Gateway</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/static/vue.global.js"></script>
+    <script src="/static/element-plus.js"></script>
+    <link rel="stylesheet" href="/static/element-plus.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #fff; padding: 15px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 20px; color: #409eff; }
+        .header-nav { display: flex; gap: 20px; }
+        .header-nav a { color: #666; text-decoration: none; cursor: pointer; }
+        .header-nav a:hover { color: #409eff; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn-primary { background: #409eff; color: #fff; }
+        .btn-success { background: #67c23a; color: #fff; }
+        .btn-warning { background: #e6a23c; color: #fff; }
+        .btn-danger { background: #f56c6c; color: #fff; }
+        .btn-disabled { background: #c0c4cc; color: #fff; cursor: not-allowed; }
+        .package-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+        .package-card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 24px; text-align: center; transition: transform 0.2s; }
+        .package-card:hover { transform: translateY(-4px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+        .package-card.featured { border: 2px solid #409eff; }
+        .package-name { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+        .package-price { font-size: 32px; color: #409eff; font-weight: bold; margin: 20px 0; }
+        .package-price span { font-size: 14px; color: #999; font-weight: normal; }
+        .package-quota { font-size: 14px; color: #666; margin-bottom: 20px; }
+        .package-desc { font-size: 14px; color: #999; margin-bottom: 20px; min-height: 40px; }
+        .loading { text-align: center; padding: 60px; color: #909399; }
+        .error { color: #f56c6c; padding: 10px; background: #fef0f0; border-radius: 4px; margin: 10px 0; }
+        .success { color: #67c23a; padding: 10px; background: #f0f9eb; border-radius: 4px; margin: 10px 0; }
+        .payment-methods { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+        .payment-method { padding: 10px 20px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; }
+        .payment-method.selected { border-color: #409eff; background: #ecf5ff; }
+        .currency-select { margin: 20px 0; text-align: center; }
+        .checkout-modal { text-align: center; }
+        .checkout-price { font-size: 48px; color: #409eff; font-weight: bold; margin: 20px 0; }
+
+        /* Auth Dialog Styles */
+        .auth-tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 20px; }
+        .auth-tab { padding: 10px 30px; cursor: pointer; font-size: 15px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .auth-tab:hover { color: #409eff; }
+        .auth-tab.active { color: #409eff; border-bottom-color: #409eff; }
+        .form-item { margin-bottom: 15px; }
+        .form-item label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
+        .form-item input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+        .form-item input:focus { outline: none; border-color: #409eff; }
+        .code-input-group { display: flex; gap: 10px; }
+        .code-input-group input { flex: 1; }
+        .send-code-btn { padding: 10px 15px; background: #67c23a; color: #fff; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+        .send-code-btn:disabled { background: #c0c4cc; cursor: not-allowed; }
+        .auth-divider { text-align: center; margin: 20px 0; color: #999; font-size: 13px; }
+
+        @media (max-width: 768px) {
+            .package-grid { grid-template-columns: 1fr; }
+            .code-input-group { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>{{ systemName }}</h1>
+            <div class="header-nav">
+                <select v-model="currentLang" @change="setLanguage(currentLang)" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; margin-right: 10px;">
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                </select>
+                <a @click="goHome">{{ t('home') }}</a>
+                <a v-if="isLoggedIn" @click="showProfile = true">{{ t('profile') }}</a>
+                <a v-if="!isLoggedIn" @click="showAuthDialog('login')">{{ t('login') }}</a>
+                <a v-if="!isLoggedIn" @click="showAuthDialog('register')">{{ t('register') }}</a>
+                <a v-if="isLoggedIn" @click="logout">{{ t('logout') }}</a>
+                <a v-if="isLoggedIn" @click="goDashboard">{{ t('dashboard') }}</a>
+            </div>
+        </div>
+
+        <div class="container">
+            <div v-if="loading" class="loading">{{ t('loading_packages') }}...</div>
+
+            <div v-else>
+                <!-- Auto-login processing indicator -->
+                <div v-if="processingAutoLogin" class="card" style="text-align: center; padding: 40px;">
+                    <div style="color: #409eff; font-size: 18px;">{{ t('logging_in_via_link') }}</div>
+                    <div style="color: #999; margin-top: 10px;">{{ t('please_wait') }}</div>
+                </div>
+
+                <div class="card" v-if="!processingAutoLogin">
+                    <h2>{{ t('select_package') }}</h2>
+                    <div class="currency-select">
+                        <label>{{ t('currency') }}: </label>
+                        <select v-model="selectedCurrency" @change="onCurrencyChange">
+                            <option value="USD">USD - US Dollar</option>
+                            <option value="HKD">HKD - Hong Kong Dollar</option>
+                            <option value="CNY">CNY - Chinese Yuan</option>
+                            <option value="EUR">EUR - Euro</option>
+                        </select>
+                    </div>
+
+                    <div v-if="error" class="error">{{ error }}</div>
+
+                    <div class="package-grid">
+                        <div v-for="pkg in packages" :key="pkg.id"
+                             class="package-card"
+                             :class="{ 'featured': pkg.package_type === 'monthly' }">
+                            <div class="package-name">{{ pkg.name }}</div>
+                            <div class="package-desc">{{ pkg.description }}</div>
+                            <div class="package-quota">{{ formatQuota(pkg.quota) }} {{ t('tokens') }}</div>
+                            <div class="package-price">
+                                {{ getPrice(pkg) }} {{ selectedCurrency }}
+                                <span v-if="pkg.package_type === 'monthly'">/{{ t('month') }}</span>
+                            </div>
+                            <button class="btn" :class="isLoggedIn ? 'btn-primary' : 'btn-warning'" @click="selectPackage(pkg)">
+                                {{ isLoggedIn ? t('purchase') : t('login_to_purchase') }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="packages.length === 0" style="text-align: center; padding: 40px; color: #909399;">
+                        {{ t('no_packages') }}
+                    </div>
+                </div>
+
+                <div class="card" v-if="selectedPkg && !processingAutoLogin">
+                    <h2>{{ t('checkout') }}: {{ selectedPkg.name }}</h2>
+                    <div class="checkout-modal">
+                        <div class="checkout-price">{{ getPrice(selectedPkg) }} {{ selectedCurrency }}</div>
+                        <div class="package-quota">{{ formatQuota(selectedPkg.quota) }} {{ t('tokens') }}</div>
+
+                        <div class="payment-methods">
+                            <div v-for="pm in getAvailableProviders(selectedPkg)" :key="pm"
+                                 class="payment-method"
+                                 :class="{ 'selected': selectedProvider === pm }"
+                                 @click="selectedProvider = pm">
+                                {{ getProviderName(pm) }}
+                            </div>
+                        </div>
+
+                        <div v-if="checkoutError" class="error">{{ checkoutError }}</div>
+                        <div v-if="checkoutSuccess" class="success">{{ checkoutSuccess }}</div>
+
+                        <button class="btn btn-success" @click="processPayment" :disabled="processing">
+                            {{ processing ? t('processing') : t('pay_now') }}
+                        </button>
+                        <button class="btn" @click="selectedPkg = null">{{ t('cancel') }}</button>
+                    </div>
+                </div>
+
+                <div class="card" v-if="isLoggedIn && !processingAutoLogin">
+                    <h2>{{ t('my_orders') }}</h2>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 12px; text-align: left;">{{ t('order_no') }}</th>
+                                <th style="padding: 12px; text-align: left;">{{ t('package') }}</th>
+                                <th style="padding: 12px; text-align: left;">{{ t('amount') }}</th>
+                                <th style="padding: 12px; text-align: left;">{{ t('status') }}</th>
+                                <th style="padding: 12px; text-align: left;">{{ t('date') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="order in myOrders" :key="order.order_no" style="border-bottom: 1px solid #eee;">
+                                <td style="padding: 12px;">{{ order.order_no }}</td>
+                                <td style="padding: 12px;">{{ getPackageName(order.package_id) }}</td>
+                                <td style="padding: 12px;">{{ order.amount }} {{ order.currency }}</td>
+                                <td style="padding: 12px;">
+                                    <span :style="{ color: getStatusColor(order.status) }">{{ order.status }}</span>
+                                </td>
+                                <td style="padding: 12px;">{{ formatTime(order.created_time) }}</td>
+                            </tr>
+                            <tr v-if="myOrders.length === 0">
+                                <td colspan="5" style="padding: 20px; text-align: center; color: #909399;">{{ t('no_orders') }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background: #fff; padding: 20px; margin-top: 20px; border-top: 1px solid #eee;">
+            <div style="max-width: 1200px; margin: 0 auto; text-align: center;">
+                <div style="color: #999; font-size: 12px;">
+                    Powered by <a href="https://github.com/kandada/llmapi" target="_blank" style="color: #409eff; text-decoration: none;">llmapi</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Dialog -->
+        <el-dialog v-model="showAuth" :title="authMode === 'login' ? t('login') : (authMode === 'register' ? t('register') : t('change_password'))" width="420px">
+            <div style="padding: 10px 0;">
+                <!-- Auth Tabs -->
+                <div v-if="authMode !== 'changePassword'" class="auth-tabs">
+                    <div class="auth-tab" :class="{ active: authMode === 'login' }" @click="authMode = 'login'; clearAuthForm()">{{ t('login') }}</div>
+                    <div class="auth-tab" :class="{ active: authMode === 'register' }" @click="authMode = 'register'; clearAuthForm()">{{ t('register') }}</div>
+                </div>
+
+                <div v-if="authError" class="error">{{ authError }}</div>
+                <div v-if="authSuccessMsg" class="success">{{ authSuccessMsg }}</div>
+
+                <!-- Login Form -->
+                <div v-if="authMode === 'login'">
+                    <div class="form-item">
+                        <label>{{ t('username_email') }}</label>
+                        <input type="text" v-model="authForm.username" :placeholder="t('enter_username_email')" @keyup.enter="submitAuth">
+                    </div>
+                    <div class="form-item">
+                        <label>{{ t('password') }}</label>
+                        <input type="password" v-model="authForm.password" :placeholder="t('enter_password')" @keyup.enter="submitAuth">
+                    </div>
+                    <div class="auth-divider">{{ t('or_with_email_code') }}</div>
+                    <div class="form-item">
+                        <label>{{ t('email') }}</label>
+                        <input type="email" v-model="authForm.email" :placeholder="t('enter_email_code_login')">
+                    </div>
+                    <div class="code-input-group">
+                        <input type="text" v-model="authForm.code" :placeholder="t('verification_code')" @keyup.enter="submitAuth">
+                        <button class="send-code-btn" @click="sendCode" :disabled="codeSending || codeCooldown > 0">
+                            {{ codeCooldown > 0 ? `${codeCooldown}s` : (codeSending ? t('sending') : t('send_code')) }}
+                        </button>
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" @click="submitAuth" :disabled="authSubmitting">
+                        {{ authSubmitting ? t('processing') : t('login') }}
+                    </button>
+                </div>
+
+                <!-- Register Form (password-based, no email verification) -->
+                <div v-if="authMode === 'register'">
+                    <div class="form-item">
+                        <label>{{ t('username') }} (3-32 {{ t('chars') }})</label>
+                        <input type="text" v-model="authForm.username" :placeholder="t('choose_username')">
+                    </div>
+                    <div class="form-item">
+                        <label>{{ t('password') }} ({{ t('min_8_chars') }})</label>
+                        <input type="password" v-model="authForm.password" :placeholder="t('create_password')">
+                    </div>
+                    <div class="form-item">
+                        <label>{{ t('email') }} ({{ t('optional') }})</label>
+                        <input type="email" v-model="authForm.email" :placeholder="t('email_for_recovery')">
+                    </div>
+                    <button class="btn btn-success" style="width: 100%; margin-top: 10px;" @click="submitAuth" :disabled="authSubmitting">
+                        {{ authSubmitting ? t('creating') : t('register') }}
+                    </button>
+                </div>
+
+                <!-- Change Password Form -->
+                <div v-if="authMode === 'changePassword'">
+                    <div class="form-item">
+                        <label>{{ t('current_password') }}</label>
+                        <input type="password" v-model="authForm.oldPassword" :placeholder="t('enter_current_password')">
+                    </div>
+                    <div class="form-item">
+                        <label>{{ t('new_password') }} ({{ t('min_8_chars') }})</label>
+                        <input type="password" v-model="authForm.newPassword" :placeholder="t('enter_new_password')">
+                    </div>
+                    <div class="form-item">
+                        <label>{{ t('confirm_new_password') }}</label>
+                        <input type="password" v-model="authForm.confirmPassword" :placeholder="t('confirm_new_password')">
+                    </div>
+                    <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" @click="submitAuth" :disabled="authSubmitting">
+                        {{ authSubmitting ? t('processing') : t('change_password') }}
+                    </button>
+                    <button class="btn" style="width: 100%; margin-top: 10px;" @click="authMode = 'profile'; clearAuthForm()">{{ t('cancel') }}</button>
+                </div>
+            </div>
+        </el-dialog>
+
+        <!-- Profile Dialog -->
+        <el-dialog v-model="showProfile" :title="t('my_profile')" width="450px">
+            <div style="padding: 10px 0;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #409eff, #66b1ff); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto;">
+                        {{ userInfo.username?.charAt(0).toUpperCase() }}
+                    </div>
+                    <div style="margin-top: 10px; font-size: 18px; font-weight: 500;">{{ userInfo.display_name || userInfo.username }}</div>
+                    <div style="color: #999; font-size: 13px;">{{ userInfo.email || t('no_email_set') }}</div>
+                </div>
+
+                <div style="background: #f5f7fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="color: #666;">{{ t('available_quota') }}</span>
+                        <span style="font-weight: bold; color: #409eff;">{{ formatQuota(userInfo.quota || 0) }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #666;">{{ t('used_quota') }}</span>
+                        <span style="color: #909399;">{{ formatQuota(userInfo.used_quota || 0) }}</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" style="flex: 1;" @click="authMode = 'changePassword'; showProfile = false; showAuth = true; clearAuthForm()">{{ t('change_password') }}</button>
+                    <button class="btn btn-danger" style="flex: 1;" @click="logout">{{ t('logout') }}</button>
+                </div>
+            </div>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        const app = createApp({
+            setup() {
+                const apiBase = '';
+                const systemName = ref('LLM API Gateway');
+                const loading = ref(false);
+                const error = ref('');
+                const isLoggedIn = ref(false);
+                const userInfo = ref({});
+                const packages = ref([]);
+                const myOrders = ref([]);
+                const selectedCurrency = ref('USD');
+                const selectedPkg = ref(null);
+                const selectedProvider = ref('stripe');
+                const paymentMethods = ref([]);
+                const processing = ref(false);
+                const checkoutError = ref('');
+                const checkoutSuccess = ref('');
+
+                // Auth dialog
+                const showAuth = ref(false);
+                const authMode = ref('login');
+                const authForm = ref({ username: '', password: '', email: '', code: '', oldPassword: '', newPassword: '', confirmPassword: '' });
+                const authError = ref('');
+                const authSuccessMsg = ref('');
+                const authSubmitting = ref(false);
+
+                // Profile dialog
+                const showProfile = ref(false);
+
+                // Code sending
+                const codeSending = ref(false);
+                const codeCooldown = ref(0);
+
+                // Auto-login processing
+                const processingAutoLogin = ref(false);
+
+                // i18n
+                const currentLang = ref('en');
+                const translations = ref({});
+
+                const t = (key) => {
+                    return translations.value[key] || key;
+                };
+
+                const loadI18n = async (lang) => {
+                    const result = await api('GET', `/api/i18n/${lang}`);
+                    if (result?.success) {
+                        translations.value = result.data;
+                        currentLang.value = lang;
+                    }
+                };
+
+                const setLanguage = async (lang) => {
+                    await loadI18n(lang);
+                };
+
+                const api = async (method, path, data = null) => {
+                    const options = {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                    };
+                    if (data) {
+                        options.body = JSON.stringify(data);
+                    }
+                    const response = await fetch(apiBase + path, options);
+                    return response.json();
+                };
+
+                const loadPackages = async () => {
+                    loading.value = true;
+                    error.value = '';
+                    const result = await api('GET', '/shop/package/');
+                    if (result.success) {
+                        let pkgs = result.data.packages || [];
+
+                        if (paymentMethods.value.length > 0) {
+                            pkgs = pkgs.filter(pkg => {
+                                const pkgProviders = (pkg.payment_providers || 'stripe').split(',').map(p => p.trim());
+                                return pkgProviders.some(p => paymentMethods.value.includes(p));
+                            });
+                        }
+
+                        packages.value = pkgs;
+                    } else {
+                        error.value = result.message || 'Failed to load packages';
+                    }
+                    loading.value = false;
+                };
+
+                const loadPaymentProviders = async () => {
+                    const result = await api('GET', '/shop/payment/providers');
+                    if (result.success) {
+                        paymentMethods.value = result.data.providers.map(p => p.name);
+                        if (paymentMethods.value.length > 0) {
+                            selectedProvider.value = paymentMethods.value[0];
+                        }
+                    }
+                };
+
+                const getAvailableProviders = (pkg) => {
+                    if (!pkg.payment_providers) return paymentMethods.value;
+                    const pkgProviders = pkg.payment_providers.split(',').map(p => p.trim());
+                    return paymentMethods.value.filter(p => pkgProviders.includes(p));
+                };
+
+                const loadMyOrders = async () => {
+                    const result = await api('GET', '/shop/order/');
+                    if (result.success) {
+                        myOrders.value = result.data || [];
+                    }
+                };
+
+                const checkLogin = async () => {
+                    const result = await api('GET', '/api/user/self');
+                    if (result.success) {
+                        isLoggedIn.value = true;
+                        userInfo.value = result.data;
+                        await loadMyOrders();
+                        return true;
+                    }
+                    return false;
+                };
+
+                // Auto-login via token in URL
+                const handleAutoLogin = async () => {
+                    const params = new URLSearchParams(window.location.search);
+                    const token = params.get('token');
+
+                    if (!token) return false;
+
+                    processingAutoLogin.value = true;
+
+                    const result = await api('GET', `/api/external/verify-auto-login?token=${encodeURIComponent(token)}`);
+
+                    processingAutoLogin.value = false;
+
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+
+                    if (result.success) {
+                        isLoggedIn.value = true;
+                        userInfo.value = result.data;
+                        await loadMyOrders();
+                        return true;
+                    } else {
+                        error.value = result.message || 'Auto-login failed';
+                        return false;
+                    }
+                };
+
+                // Auth functions
+                const clearAuthForm = () => {
+                    authForm.value = { username: '', password: '', email: '', code: '', oldPassword: '', newPassword: '', confirmPassword: '' };
+                    authError.value = '';
+                    authSuccessMsg.value = '';
+                };
+
+                const showAuthDialog = (mode) => {
+                    authMode.value = mode;
+                    clearAuthForm();
+                    showAuth.value = true;
+                };
+
+                const sendCode = async () => {
+                    const email = authForm.value.email;
+                    if (!email) {
+                        authError.value = 'Please enter email first';
+                        return;
+                    }
+
+                    codeSending.value = true;
+                    authError.value = '';
+                    authSuccessMsg.value = '';
+
+                    const result = await api('POST', '/api/user/send-code', {
+                        email: email,
+                        type: authMode.value  // 'login' or 'register'
+                    });
+
+                    codeSending.value = false;
+
+                    if (result.success) {
+                        authSuccessMsg.value = 'Verification code sent!';
+                        // Start cooldown
+                        codeCooldown.value = 60;
+                        const timer = setInterval(() => {
+                            codeCooldown.value--;
+                            if (codeCooldown.value <= 0) clearInterval(timer);
+                        }, 1000);
+                    } else {
+                        authError.value = result.message || 'Failed to send code';
+                    }
+                };
+
+                const submitAuth = async () => {
+                    authSubmitting.value = true;
+                    authError.value = '';
+                    authSuccessMsg.value = '';
+
+                    // Password change mode
+                    if (authMode.value === 'changePassword') {
+                        if (!authForm.value.oldPassword || !authForm.value.newPassword) {
+                            authError.value = 'All fields are required';
+                            authSubmitting.value = false;
+                            return;
+                        }
+                        if (authForm.value.newPassword.length < 8) {
+                            authError.value = 'New password must be at least 8 characters';
+                            authSubmitting.value = false;
+                            return;
+                        }
+                        if (authForm.value.newPassword !== authForm.value.confirmPassword) {
+                            authError.value = 'Passwords do not match';
+                            authSubmitting.value = false;
+                            return;
+                        }
+                        const result = await api('POST', '/api/user/change-password', {
+                            old_password: authForm.value.oldPassword,
+                            new_password: authForm.value.newPassword
+                        });
+                        authSubmitting.value = false;
+                        if (result.success) {
+                            authSuccessMsg.value = 'Password changed successfully!';
+                            authMode.value = 'login';
+                            clearAuthForm();
+                            showAuth.value = false;
+                        } else {
+                            authError.value = result.message || 'Failed to change password';
+                        }
+                        return;
+                    }
+
+                    const email = authForm.value.email;
+                    const code = authForm.value.code.trim();
+                    const password = authForm.value.password;
+                    const username = authForm.value.username;
+
+                    // Registration mode (password-based, no code)
+                    if (authMode.value === 'register') {
+                        if (!username || username.length < 3) {
+                            authError.value = 'Username must be 3-32 characters';
+                            authSubmitting.value = false;
+                            return;
+                        }
+                        if (!password || password.length < 8) {
+                            authError.value = 'Password must be at least 8 characters';
+                            authSubmitting.value = false;
+                            return;
+                        }
+                        const result = await api('POST', '/api/user/open-register', {
+                            username: username,
+                            password: password,
+                            email: email || undefined
+                        });
+                        authSubmitting.value = false;
+                        if (result.success) {
+                            isLoggedIn.value = true;
+                            userInfo.value = result.data;
+                            showAuth.value = false;
+                            await loadMyOrders();
+                        } else {
+                            authError.value = result.message || 'Registration failed';
+                        }
+                        return;
+                    }
+
+                    // Login mode
+                    if (code && !password && authForm.value.username) {
+                        // Email code login
+                        const result = await api('POST', '/api/user/verify-code', {
+                            email: email,
+                            code: code,
+                            type: 'login'
+                        });
+                        authSubmitting.value = false;
+                        if (result.success) {
+                            isLoggedIn.value = true;
+                            userInfo.value = result.data;
+                            showAuth.value = false;
+                            await loadMyOrders();
+                        } else {
+                            authError.value = result.message || 'Verification failed';
+                        }
+                    } else {
+                        // Username/password login
+                        const loginData = { username: authForm.value.username || email, password: authForm.value.password };
+                        const result = await api('POST', '/api/user/login', loginData);
+                        authSubmitting.value = false;
+                        if (result.success) {
+                            isLoggedIn.value = true;
+                            userInfo.value = result.data;
+                            showAuth.value = false;
+                            await loadMyOrders();
+                        } else {
+                            authError.value = result.message || 'Login failed';
+                        }
+                    }
+                };
+
+                const logout = async () => {
+                    await api('GET', '/api/user/logout');
+                    isLoggedIn.value = false;
+                    userInfo.value = {};
+                    myOrders.value = [];
+                    selectedPkg.value = null;
+                };
+
+                const getPrice = (pkg) => {
+                    try {
+                        const prices = JSON.parse(pkg.prices || '{}');
+                        return prices[selectedCurrency.value] || prices['USD'] || 0;
+                    } catch {
+                        return 0;
+                    }
+                };
+
+                const getProviderName = (provider) => {
+                    const names = { stripe: 'Credit Card (Stripe)', paypal: 'PayPal' };
+                    return names[provider] || provider;
+                };
+
+                const getStatusColor = (status) => {
+                    const colors = { pending: '#e6a23c', paid: '#67c23a', cancelled: '#909399', refunded: '#f56c6c' };
+                    return colors[status] || '#909399';
+                };
+
+                const formatQuota = (quota) => {
+                    if (quota >= 1000000000) return (quota / 1000000000).toFixed(1) + 'B';
+                    if (quota >= 1000000) return (quota / 1000000).toFixed(1) + 'M';
+                    if (quota >= 1000) return (quota / 1000).toFixed(1) + 'K';
+                    return quota.toString();
+                };
+
+                const formatTime = (timestamp) => {
+                    return new Date(timestamp * 1000).toLocaleString();
+                };
+
+                const getPackageName = (packageId) => {
+                    const pkg = packages.value.find(p => p.id === packageId);
+                    return pkg ? pkg.name : `Package #${packageId}`;
+                };
+
+                const selectPackage = (pkg) => {
+                    if (!isLoggedIn.value) {
+                        showAuthDialog('login');
+                        return;
+                    }
+                    selectedPkg.value = pkg;
+                    checkoutError.value = '';
+                    checkoutSuccess.value = '';
+
+                    const available = getAvailableProviders(pkg);
+                    if (available.length > 0) {
+                        selectedProvider.value = available[0];
+                    }
+                };
+
+                const processPayment = async () => {
+                    if (!selectedPkg.value) return;
+
+                    processing.value = true;
+                    checkoutError.value = '';
+                    checkoutSuccess.value = '';
+
+                    const returnUrl = window.location.origin + '/shop/success';
+                    const cancelUrl = window.location.href;
+
+                    const result = await api('POST', '/shop/order/create', {
+                        package_id: selectedPkg.value.id,
+                        currency: selectedCurrency.value,
+                        payment_provider: selectedProvider.value,
+                        return_url: returnUrl,
+                        cancel_url: cancelUrl
+                    });
+
+                    processing.value = false;
+
+                    if (result.success && result.data.payment_url) {
+                        window.location.href = result.data.payment_url;
+                    } else {
+                        checkoutError.value = result.message || 'Failed to create order';
+                    }
+                };
+
+                const onCurrencyChange = () => {
+                    selectedPkg.value = null;
+                };
+
+                const goHome = () => {
+                    window.location.href = '/';
+                };
+
+                const goDashboard = () => {
+                    window.location.href = '/';
+                };
+
+                onMounted(async () => {
+                    await loadI18n('en');
+                    // First try auto-login from URL token
+                    const autoLoggedIn = await handleAutoLogin();
+
+                    // Load packages and providers
+                    await loadPaymentProviders();
+                    await loadPackages();
+
+                    // If not auto-logged in, check existing session
+                    if (!autoLoggedIn) {
+                        await checkLogin();
+                    }
+                });
+
+                return {
+                    systemName,
+                    loading,
+                    error,
+                    isLoggedIn,
+                    userInfo,
+                    packages,
+                    myOrders,
+                    selectedCurrency,
+                    selectedPkg,
+                    selectedProvider,
+                    paymentMethods,
+                    processing,
+                    checkoutError,
+                    checkoutSuccess,
+                    showAuth,
+                    authMode,
+                    authForm,
+                    authError,
+                    authSuccessMsg,
+                    authSubmitting,
+                    codeSending,
+                    codeCooldown,
+                    processingAutoLogin,
+                    showProfile,
+                    showAuthDialog,
+                    clearAuthForm,
+                    sendCode,
+                    submitAuth,
+                    logout,
+                    goHome,
+                    goDashboard,
+                    getPrice,
+                    getProviderName,
+                    getAvailableProviders,
+                    getStatusColor,
+                    formatQuota,
+                    formatTime,
+                    getPackageName,
+                    selectPackage,
+                    processPayment,
+                    onCurrencyChange,
+                    t,
+                    currentLang,
+                    setLanguage
+                };
+            }
+        });
+
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>
