@@ -45,10 +45,17 @@ class Distributor:
         if not abilities:
             return None
 
+        channel_ids = [a.channel_id for a in abilities]
+        channels = self.db.query(Channel).filter(
+            Channel.id.in_(channel_ids),
+            Channel.status == ChannelStatus.ENABLED,
+        ).all()
+        channel_map = {c.id: c for c in channels}
+
         priority_channels = {}
         for ability in abilities:
-            channel = self.db.query(Channel).filter(Channel.id == ability.channel_id).first()
-            if channel and channel.status == ChannelStatus.ENABLED:
+            channel = channel_map.get(ability.channel_id)
+            if channel:
                 priority = ability.priority or 0
                 if priority not in priority_channels:
                     priority_channels[priority] = []

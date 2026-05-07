@@ -2,7 +2,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 import json
 
-from models.package import Package, PackageStatus, PackageType
+from models.package import Package, PackageStatus
 from utils.time import get_timestamp
 
 
@@ -31,12 +31,8 @@ class PackageService:
         package = Package(
             name=package_data.get("name", ""),
             description=package_data.get("description", ""),
-            package_type=package_data.get("package_type", PackageType.PREPAID),
             quota=package_data.get("quota", 0),
             prices=prices,
-            duration_days=package_data.get("duration_days", -1),
-            max_tokens=package_data.get("max_tokens", -1),
-            allowed_models=package_data.get("allowed_models", ""),
             status=package_data.get("status", PackageStatus.ENABLED),
             payment_providers=package_data.get("payment_providers", "stripe"),
             sort_order=package_data.get("sort_order", 0),

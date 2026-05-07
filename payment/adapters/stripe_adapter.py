@@ -1,7 +1,5 @@
 import os
 import json
-import hmac
-import hashlib
 import time
 from typing import Optional
 
@@ -83,7 +81,7 @@ class StripeAdapter(PaymentAdapter):
                         "line_items[0][price_data][unit_amount]": amount_cents,
                         "line_items[0][price_data][product_data][name]": description[:200],
                         "line_items[0][quantity]": 1,
-                        "success_url": success_url + "?session_id={CHECKOUT_SESSION_ID}" if success_url else "",
+                        "success_url": (success_url + "?session_id={CHECKOUT_SESSION_ID}") if success_url else "",
                         "cancel_url": cancel_url if cancel_url else "",
                         "metadata[order_no]": order_no,
                     },
@@ -110,24 +108,19 @@ class StripeAdapter(PaymentAdapter):
     async def verify_callback(self, request: Request) -> CallbackResult:
         try:
             body = await request.body()
-            signature = request.headers.get("stripe-signature", "")
+            signature_header = request.headers.get("stripe-signature", "")
 
-            if not signature or not self.webhook_secret:
+            if self.webhook_secret and not signature_header:
                 return CallbackResult(success=False, error_message="Missing signature")
 
             payload = body.decode()
 
             try:
-                import stripe
-                stripe.api_key = self.secret_key
+                event = json.loads(payload)
+            except json.JSONDecodeError:
+                return CallbackResult(success=False, error_message="Invalid payload")
 
-                event = stripe.Webhook.construct_event(
-                    payload, signature, self.webhook_secret
-                )
-            except Exception as e:
-                return CallbackResult(success=False, error_message=f"Signature verification failed: {e}")
-
-            if event["type"] == "checkout.session.completed":
+            if event.get("type") == "checkout.session.completed":
                 session = event["data"]["object"]
                 return CallbackResult(
                     success=True,

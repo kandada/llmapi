@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 
@@ -19,6 +19,24 @@ class TokenUpdate(BaseModel):
     expired_time: Optional[int] = None
     remain_quota: Optional[int] = None
     unlimited_quota: Optional[bool] = None
+    models: Optional[str] = None
+    subnet: Optional[str] = None
+    channel_group: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    user_id: int
+    key: str
+    status: int
+    name: str
+    created_time: int
+    accessed_time: int
+    expired_time: int
+    remain_quota: int
+    unlimited_quota: bool
+    used_quota: int
     models: Optional[str] = None
     subnet: Optional[str] = None
     channel_group: Optional[str] = None

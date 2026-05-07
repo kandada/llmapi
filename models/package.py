@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, BigInteger, Boolean
+from sqlalchemy import Column, Integer, String, Text, BigInteger
 from .base import BaseModel
 
 
@@ -8,16 +8,10 @@ class Package(BaseModel):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
-    package_type = Column(String(20), nullable=False, default="prepaid")
 
     quota = Column(BigInteger, nullable=False, default=0)
 
     prices = Column(Text, default="{}")
-
-    duration_days = Column(Integer, default=-1)
-
-    max_tokens = Column(BigInteger, default=-1)
-    allowed_models = Column(Text, default="")
 
     status = Column(Integer, default=1)
 
@@ -27,12 +21,6 @@ class Package(BaseModel):
 
     created_time = Column(BigInteger, nullable=False)
     updated_time = Column(BigInteger, nullable=False)
-
-
-class PackageType:
-    MONTHLY = "monthly"
-    PREPAID = "prepaid"
-    ONCE = "once"
 
 
 class PackageStatus:

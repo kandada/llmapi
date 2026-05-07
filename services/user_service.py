@@ -143,6 +143,12 @@ class UserService:
     def get_user_by_github_id(self, github_id: str) -> Optional[User]:
         return self.db.query(User).filter(User.github_id == github_id).first()
 
+    def get_user_by_lark_id(self, lark_id: str) -> Optional[User]:
+        return self.db.query(User).filter(User.lark_id == lark_id).first()
+
+    def get_user_by_oidc_id(self, oidc_id: str) -> Optional[User]:
+        return self.db.query(User).filter(User.oidc_id == oidc_id).first()
+
     def search_users(self, keyword: str) -> List[User]:
         try:
             uid = int(keyword)

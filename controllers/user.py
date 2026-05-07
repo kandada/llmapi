@@ -67,20 +67,24 @@ class UserController:
 
     async def get_self(self, ctx: AuthContext = Depends(require_user)) -> APIResponse:
         user = ctx.user
-        return APIResponse(
-            success=True,
-            data={
-                "id": user.id,
-                "username": user.username,
-                "display_name": user.display_name,
-                "role": user.role,
-                "status": user.status,
-                "email": user.email,
-                "quota": user.quota,
-                "used_quota": user.used_quota,
-                "group": user.group,
-            }
-        )
+        user_data = {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "role": user.role,
+            "status": user.status,
+            "email": user.email,
+            "quota": user.quota,
+            "used_quota": user.used_quota,
+            "group": user.group,
+        }
+        tokens = self.token_service.get_user_tokens(user.id, limit=1)
+        if tokens:
+            user_data["api_key"] = tokens[0].key
+        else:
+            token = self.token_service.create_token(user.id, {"name": "Default Token", "remain_quota": 0, "unlimited_quota": True})
+            user_data["api_key"] = token.key
+        return APIResponse(success=True, data=user_data)
 
     async def update_self(self, update_data: dict, ctx: AuthContext = Depends(require_user)) -> APIResponse:
         if "password" in update_data and update_data["password"]:

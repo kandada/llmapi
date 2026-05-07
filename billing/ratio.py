@@ -311,7 +311,7 @@ MODEL_RATIO: Dict[str, float] = {
 COMPLETION_RATIO: Dict[str, float] = {
     "llama3-8b-8192(33)": 0.0006 / 0.0003,
     "llama3-70b-8192(33)": 0.0035 / 0.00265,
-    "whisper-1": 0,
+    "whisper-1": 0.0,
     "deepseek-chat": 0.28 / 0.14,
     "deepseek-reasoner": 2.19 / 0.55,
     "gpt-3.5": 1,

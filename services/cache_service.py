@@ -2,21 +2,27 @@ import asyncio
 import time
 from typing import Any, Dict, Optional, List
 from collections import defaultdict
-import threading
 
 
 class CacheService:
     _instance = None
 
-    def __init__(self):
-        self._cache: Dict[str, tuple[Any, float]] = {}
-        self._lock = threading.Lock()
-        self._success_rates: Dict[int, List[int]] = defaultdict(list)
-        self._error_counts: Dict[int, int] = defaultdict(int)
-        self._queue_size = 10
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._cache = {}
+            cls._instance._lock = asyncio.Lock()
+            cls._instance._queue_size = 10
+        return cls._instance
 
-    def get(self, key: str) -> Any:
-        with self._lock:
+    def __init__(self):
+        if not hasattr(self, '_cache'):
+            self._cache: Dict[str, tuple[Any, float]] = {}
+            self._lock = asyncio.Lock()
+            self._queue_size = 10
+
+    async def get(self, key: str) -> Any:
+        async with self._lock:
             if key in self._cache:
                 value, expire_time = self._cache[key]
                 if expire_time == 0 or time.time() < expire_time:
@@ -25,24 +31,24 @@ class CacheService:
                     del self._cache[key]
             return None
 
-    def set(self, key: str, value: Any, ttl: int = 60):
-        with self._lock:
+    async def set(self, key: str, value: Any, ttl: int = 60):
+        async with self._lock:
             expire_time = time.time() + ttl if ttl > 0 else 0
             self._cache[key] = (value, expire_time)
 
-    def delete(self, key: str):
-        with self._lock:
+    async def delete(self, key: str):
+        async with self._lock:
             self._cache.pop(key, None)
 
-    def clear(self):
-        with self._lock:
+    async def clear(self):
+        async with self._lock:
             self._cache.clear()
 
-    def get_or_set(self, key: str, factory, ttl: int = 60) -> Any:
-        value = self.get(key)
+    async def get_or_set(self, key: str, factory, ttl: int = 60) -> Any:
+        value = await self.get(key)
         if value is None:
             value = factory() if callable(factory) else factory
-            self.set(key, value, ttl)
+            await self.set(key, value, ttl)
         return value
 
 
@@ -53,8 +59,8 @@ class ChannelMonitorCache:
     def __init__(self):
         self._success_rates: Dict[int, List[int]] = defaultdict(list)
         self._error_messages: Dict[int, List[str]] = defaultdict(list)
-        self._queue_size = 10
-        self._threshold = 0.5
+        self._queue_size = 5
+        self._threshold = 0.25
 
     @classmethod
     def get_instance(cls):
@@ -83,10 +89,11 @@ class ChannelMonitorCache:
 
         history = self._success_rates[channel_id]
         if len(history) < self._queue_size:
-            return False
+            if len(history) < self._queue_size // 2:
+                return False
 
         rate = sum(history) / len(history)
-        return rate < self._threshold
+        return rate <= self._threshold
 
     def get_error_summary(self, channel_id: int) -> Optional[str]:
         if channel_id not in self._error_messages:

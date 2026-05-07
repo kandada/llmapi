@@ -44,7 +44,27 @@ def init_db():
     from models import user, channel, token, redemption, log, option, ability, package, order
     Base.metadata.create_all(bind=_engine)
 
+    _migrate_schema()
+
     create_root_user_if_need()
+
+
+def _migrate_schema():
+    if not get_database_url().startswith("sqlite"):
+        return
+    conn = _engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(packages)")
+        cols = {row[1] for row in cursor.fetchall()}
+        deprecated = {"package_type", "duration_days", "max_tokens", "allowed_models"}
+        for col in deprecated & cols:
+            cursor.execute(f"ALTER TABLE packages DROP COLUMN {col}")
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 
 def create_root_user_if_need():

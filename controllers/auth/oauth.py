@@ -131,7 +131,7 @@ class OAuthController:
                 display_name = user_data.get("name", username)
                 email = user_data.get("email")
 
-                user = self.user_service.get_user_by_github_id(lark_id)
+                user = self.user_service.get_user_by_lark_id(lark_id)
 
                 if not user:
                     existing_user = self.user_service.get_user_by_username(username)
@@ -202,7 +202,7 @@ class OAuthController:
                 display_name = user_data.get("name", username)
                 email = user_data.get("email")
 
-                user = self.user_service.get_user_by_github_id(oidc_id)
+                user = self.user_service.get_user_by_oidc_id(oidc_id)
 
                 if not user:
                     existing_user = self.user_service.get_user_by_username(username)

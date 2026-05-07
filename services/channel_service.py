@@ -1,43 +1,11 @@
 from typing import Optional, List, Dict
 import json
-import asyncio
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from models import channel, ability
 from models.channel import Channel, ChannelStatus
 from config import config
 from utils.time import get_timestamp
-
-
-class CacheService:
-    _instance = None
-    _cache: Dict[str, any] = {}
-    _lock = asyncio.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    async def get(self, key: str) -> any:
-        async with self._lock:
-            return self._cache.get(key)
-
-    async def set(self, key: str, value: any, ttl: int = 60):
-        async with self._lock:
-            self._cache[key] = value
-
-    async def delete(self, key: str):
-        async with self._lock:
-            self._cache.pop(key, None)
-
-    async def clear(self):
-        async with self._lock:
-            self._cache.clear()
-
-
-cache_service = CacheService()
 
 
 class ChannelService:
@@ -50,52 +18,7 @@ class ChannelService:
     def get_channel_by_id(self, channel_id: int, include_key: bool = False) -> Optional[Channel]:
         if include_key:
             return self.db.query(Channel).filter(Channel.id == channel_id).first()
-        query = self.db.query(
-            Channel.id,
-            Channel.type,
-            Channel.status,
-            Channel.name,
-            Channel.weight,
-            Channel.base_url,
-            Channel.models,
-            Channel.group,
-            Channel.model_mapping,
-            Channel.priority,
-            Channel.config,
-            Channel.system_prompt,
-            Channel.balance,
-            Channel.response_time,
-            Channel.test_time,
-            Channel.created_time,
-            Channel.used_quota,
-            Channel.key,
-            Channel.llm_gateway,
-            Channel.balance_updated_time,
-        ).filter(Channel.id == channel_id).first()
-        if query:
-            ch = Channel()
-            ch.id = query[0]
-            ch.type = query[1]
-            ch.status = query[2]
-            ch.name = query[3]
-            ch.weight = query[4]
-            ch.base_url = query[5]
-            ch.models = query[6]
-            ch.group = query[7]
-            ch.model_mapping = query[8]
-            ch.priority = query[9]
-            ch.config = query[10]
-            ch.system_prompt = query[11]
-            ch.balance = query[12]
-            ch.response_time = query[13]
-            ch.test_time = query[14]
-            ch.created_time = query[15]
-            ch.used_quota = query[16]
-            ch.key = query[17] if include_key else ""
-            ch.llm_gateway = query[18] or "openai"
-            ch.balance_updated_time = query[19]
-            return ch
-        return None
+        return self.db.query(Channel).filter(Channel.id == channel_id).first()
 
     def search_channels(self, keyword: str) -> List[Channel]:
         try:
@@ -179,27 +102,40 @@ class ChannelService:
         self.db.commit()
 
     def _update_abilities(self, ch: Channel):
-        self.db.query(ability.Ability).filter(ability.Ability.channel_id == ch.id).delete()
-        self.db.commit()
-
         models = [m.strip() for m in ch.models.split(",") if m.strip()]
         groups = [g.strip() for g in ch.group.split(",") if g.strip()]
+        enabled = ch.status == ChannelStatus.ENABLED
+        priority = ch.priority or 0
 
-        abilities = []
+        existing = self.db.query(ability.Ability).filter(
+            ability.Ability.channel_id == ch.id
+        ).all()
+        existing_set = {(a.group, a.model) for a in existing}
+
+        new_set = set()
         for model in models:
             for group in groups:
-                ab = ability.Ability(
-                    group=group,
-                    model=model,
-                    channel_id=ch.id,
-                    enabled=ch.status == ChannelStatus.ENABLED,
-                    priority=ch.priority or 0,
-                )
-                abilities.append(ab)
+                new_set.add((group, model))
 
-        if abilities:
-            self.db.add_all(abilities)
-            self.db.commit()
+        to_delete = [a for a in existing if (a.group, a.model) not in new_set]
+        for a in to_delete:
+            self.db.delete(a)
+
+        to_add = []
+        for group, model in new_set - existing_set:
+            to_add.append(ability.Ability(
+                group=group, model=model, channel_id=ch.id,
+                enabled=enabled, priority=priority,
+            ))
+
+        for a in existing:
+            if (a.group, a.model) in new_set:
+                a.enabled = enabled
+                a.priority = priority
+
+        if to_add:
+            self.db.add_all(to_add)
+        self.db.commit()
 
     def get_enabled_channels_count(self) -> int:
         return self.db.query(Channel).filter(Channel.status == ChannelStatus.ENABLED).count()

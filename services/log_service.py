@@ -137,7 +137,8 @@ class LogService:
         token_name: str = "",
         channel_id: int = 0,
     ) -> int:
-        query = self.db.query(Log).filter(Log.type == log_type)
+        from sqlalchemy import func
+        query = self.db.query(func.coalesce(func.sum(Log.quota), 0)).filter(Log.type == log_type)
 
         if username:
             query = query.filter(Log.username == username)
@@ -152,8 +153,7 @@ class LogService:
         if channel_id:
             query = query.filter(Log.channel_id == channel_id)
 
-        result = query.all()
-        return sum(log.quota for log in result)
+        return query.scalar()
 
     def delete_old_logs(self, target_timestamp: int) -> int:
         count = self.db.query(Log).filter(Log.created_at < target_timestamp).delete()

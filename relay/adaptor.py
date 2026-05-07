@@ -10,6 +10,16 @@ if TYPE_CHECKING:
     from models.channel import Channel
 
 
+_shared_client = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None:
+        _shared_client = httpx.AsyncClient(timeout=120.0)
+    return _shared_client
+
+
 class BaseAdaptor(ABC):
     def __init__(self):
         self.channel_type = 0
@@ -49,15 +59,15 @@ class BaseAdaptor(ABC):
         headers: Dict[str, str],
         body: bytes = None,
     ) -> httpx.Response:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            if method == "GET":
-                return await client.get(url, headers=headers)
-            elif method == "POST":
-                return await client.post(url, headers=headers, content=body)
-            elif method == "DELETE":
-                return await client.delete(url, headers=headers)
-            else:
-                return await client.get(url, headers=headers)
+        client = get_http_client()
+        if method == "GET":
+            return await client.get(url, headers=headers)
+        elif method == "POST":
+            return await client.post(url, headers=headers, content=body)
+        elif method == "DELETE":
+            return await client.delete(url, headers=headers)
+        else:
+            return await client.get(url, headers=headers)
 
     async def relay(
         self,
@@ -81,24 +91,24 @@ class BaseAdaptor(ABC):
         headers["Accept"] = "text/event-stream"
         body = json.dumps(request).encode()
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream("POST", url, headers=headers, content=body) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    yield f'data: {{"error": {{"message": "{error_text.decode()}", "type": "upstream_error"}}}}'
-                    yield "data: [DONE]\n\n"
-                    return
+        client = get_http_client()
+        async with client.stream("POST", url, headers=headers, content=body) as response:
+            if response.status_code != 200:
+                error_text = await response.aread()
+                yield f'data: {{"error": {{"message": "{error_text.decode()}", "type": "upstream_error"}}}}'
+                yield "data: [DONE]\n\n"
+                return
 
-                async for line in response.aiter_lines():
-                    if line:
-                        if line.startswith("data: "):
-                            data = line[6:]
-                            if data == "[DONE]":
-                                yield "data: [DONE]\n\n"
-                                break
-                            yield f"data: {data}\n\n"
-                        else:
-                            yield f"{line}\n\n"
+            async for line in response.aiter_lines():
+                if line:
+                    if line.startswith("data: "):
+                        data = line[6:]
+                        if data == "[DONE]":
+                            yield "data: [DONE]\n\n"
+                            break
+                        yield f"data: {data}\n\n"
+                    else:
+                        yield f"{line}\n\n"
 
     async def handle_stream(self, response: httpx.Response, meta: Dict[str, Any]) -> AsyncGenerator[str, None]:
         async for line in response.aiter_lines():
@@ -206,6 +216,8 @@ class AnthropicAdaptor(BaseAdaptor):
     def __init__(self):
         super().__init__()
         self.channel_type = ChannelType.ANTHROPIC
+        self._tool_call_id = ""
+        self._tool_call_name = ""
 
     async def convert_request(self, request: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
         anthropic_request = {
@@ -225,6 +237,9 @@ class AnthropicAdaptor(BaseAdaptor):
         thinking = request.get("thinking", None)
         if thinking:
             anthropic_request["thinking"] = thinking
+
+        if request.get("stream", False):
+            anthropic_request["stream"] = True
 
         return anthropic_request
 
@@ -335,6 +350,9 @@ class AnthropicAdaptor(BaseAdaptor):
                             "arguments": block.get("input", "{}") if isinstance(block.get("input"), str) else json.dumps(block.get("input", {}))
                         }
                     })
+                elif block_type == "thinking":
+                    if not thinking_content:
+                        thinking_content = block.get("thinking", "")
 
         stop_reason = response.get("stop_reason", "stop")
         finish_reason = self._convert_stop_reason(stop_reason)
@@ -361,13 +379,14 @@ class AnthropicAdaptor(BaseAdaptor):
         }
 
         if thinking_content:
-            openai_response["choices"][0]["message"]["thinking"] = thinking_content
+            openai_response["choices"][0]["message"]["reasoning_content"] = thinking_content
 
         return openai_response
 
     def _convert_to_anthropic_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
         content_blocks = response.get("content", [])
         anthropic_content = []
+        has_thinking = False
 
         for block in content_blocks:
             if isinstance(block, dict):
@@ -384,14 +403,22 @@ class AnthropicAdaptor(BaseAdaptor):
                         "name": block.get("name", ""),
                         "input": block.get("input", {})
                     })
+                elif block_type == "thinking":
+                    anthropic_content.append({
+                        "type": "thinking",
+                        "thinking": block.get("thinking", ""),
+                        "signature": block.get("signature", "")
+                    })
+                    has_thinking = True
 
-        thinking = response.get("thinking", "")
-        if thinking:
-            anthropic_content.insert(0, {
-                "type": "thinking",
-                "thinking": thinking,
-                "signature": response.get("signature", "")
-            })
+        if not has_thinking:
+            thinking = response.get("thinking", "")
+            if thinking:
+                anthropic_content.insert(0, {
+                    "type": "thinking",
+                    "thinking": thinking,
+                    "signature": response.get("signature", "")
+                })
 
         return {
             "type": "message",
@@ -485,16 +512,33 @@ class AnthropicAdaptor(BaseAdaptor):
         elif event_type == "content_block_start":
             block = data.get("content_block", {})
             block_type = block.get("type", "")
+            index = data.get("index", 0)
             if block_type == "thinking":
                 return {
                     "choices": [{
-                        "index": data.get("index", 0),
-                        "delta": {"type": "thinking", "thinking": ""},
+                        "index": index,
+                        "delta": {"reasoning_content": ""},
                         "finish_reason": None
                     }]
                 }
             elif block_type == "text":
                 return None
+            elif block_type == "tool_use":
+                self._tool_call_id = block.get("id", "")
+                self._tool_call_name = block.get("name", "")
+                return {
+                    "choices": [{
+                        "index": index,
+                        "delta": {
+                            "tool_calls": [{
+                                "index": index,
+                                "id": self._tool_call_id,
+                                "function": {"name": self._tool_call_name, "arguments": ""}
+                            }]
+                        },
+                        "finish_reason": None
+                    }]
+                }
 
         elif event_type == "content_block_delta":
             delta = data.get("delta", {})
@@ -513,18 +557,26 @@ class AnthropicAdaptor(BaseAdaptor):
                 return {
                     "choices": [{
                         "index": index,
-                        "delta": {"type": "thinking", "thinking": delta.get("thinking", "")},
+                        "delta": {"reasoning_content": delta.get("thinking", "")},
                         "finish_reason": None
                     }]
                 }
             elif delta_type == "input_json_delta":
-                return {
-                    "choices": [{
-                        "index": index,
-                        "delta": {"content": ""},
-                        "finish_reason": None
-                    }]
-                }
+                partial = delta.get("partial_json", "")
+                if partial:
+                    return {
+                        "choices": [{
+                            "index": index,
+                            "delta": {
+                                "tool_calls": [{
+                                    "index": index,
+                                    "function": {"arguments": partial}
+                                }]
+                            },
+                            "finish_reason": None
+                        }]
+                    }
+                return None
 
         elif event_type == "message_delta":
             delta = data.get("delta", {})
@@ -595,6 +647,17 @@ class AnthropicAdaptor(BaseAdaptor):
                         "text": ""
                     }
                 }
+            elif block_type == "tool_use":
+                return {
+                    "type": "content_block_start",
+                    "index": index,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": block.get("id", ""),
+                        "name": block.get("name", ""),
+                        "input": {}
+                    }
+                }
 
         elif event_type == "content_block_delta":
             delta = data.get("delta", {})
@@ -617,6 +680,15 @@ class AnthropicAdaptor(BaseAdaptor):
                     "content_block": {
                         "type": "thinking_delta",
                         "thinking": delta.get("thinking", "")
+                    }
+                }
+            elif delta_type == "input_json_delta":
+                return {
+                    "type": "content_block_delta",
+                    "index": index,
+                    "content_block": {
+                        "type": "input_json_delta",
+                        "partial_json": delta.get("partial_json", "")
                     }
                 }
 
@@ -683,34 +755,29 @@ class AnthropicAdaptor(BaseAdaptor):
         body = json.dumps(request).encode()
         output_format = meta.get("output_format", "openai")
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream("POST", url, headers=headers, content=body) as response:
-                if response.status_code != 200:
-                    error_text = await response.aread()
-                    yield f'data: {{"error": {{"message": "{error_text.decode()}", "type": "upstream_error"}}}}\n\n'
-                    yield "data: [DONE]\n\n"
-                    return
+        client = get_http_client()
+        async with client.stream("POST", url, headers=headers, content=body) as response:
+            if response.status_code != 200:
+                error_text = await response.aread()
+                yield f'data: {{"error": {{"message": "{error_text.decode()}", "type": "upstream_error"}}}}\n\n'
+                yield "data: [DONE]\n\n"
+                return
 
-                async for line in response.aiter_lines():
-                    if not line:
-                        continue
-                    if line.startswith("data: "):
-                        data_str = line[6:]
-                        if data_str.strip() == "[DONE]":
-                            yield "data: [DONE]\n\n"
-                            break
-                        try:
-                            data = json.loads(data_str)
-                            converted = await self.convert_stream_chunk(data, output_format)
-                            if converted:
-                                if output_format == "anthropic":
-                                    yield f"data: {json.dumps(converted)}\n\n"
-                                else:
-                                    yield f"data: {json.dumps(converted)}\n\n"
-                        except json.JSONDecodeError:
-                            pass
-                    else:
-                        yield f"{line}\n\n"
+            async for line in response.aiter_lines():
+                if not line or line.startswith("event: "):
+                    continue
+                if line.startswith("data: "):
+                    data_str = line[6:]
+                    if data_str.strip() == "[DONE]":
+                        yield "data: [DONE]\n\n"
+                        break
+                    try:
+                        data = json.loads(data_str)
+                        converted = await self.convert_stream_chunk(data, output_format)
+                        if converted:
+                            yield f"data: {json.dumps(converted)}\n\n"
+                    except json.JSONDecodeError:
+                        pass
 
 
 class DeepSeekAdaptor(BaseAdaptor):

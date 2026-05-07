@@ -15,7 +15,7 @@ from billing.ratio import (
     get_completion_ratio_from_db,
     get_group_ratio_from_db,
 )
-from relay.adaptor import AdaptorFactory
+from relay.adaptor import AdaptorFactory, get_http_client
 from utils.time import get_timestamp
 from config import config
 
@@ -196,7 +196,10 @@ class RelayService:
 
                 elapsed_time = int((time.time() - start_time) * 1000)
 
-                quota = self.calculate_quota(model, prompt_tokens, completion_tokens, user_group, channel_type)
+                p, c = prompt_tokens, completion_tokens
+                if p == 0 and c == 0 and total_content:
+                    c = len(total_content) // 4
+                quota = self.calculate_quota(model, p, c, user_group, channel_type)
                 if quota > 0 and not skip_quota_deduction:
                     self._record_consume(
                         user_id, token_id, token_name, model,

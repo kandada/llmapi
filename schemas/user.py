@@ -45,19 +45,4 @@ class UserLogin(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
 
-    id: int
-    user_id: int
-    key: str
-    status: int
-    name: str
-    created_time: int
-    accessed_time: int
-    expired_time: int
-    remain_quota: int
-    unlimited_quota: bool
-    used_quota: int
-    models: Optional[str] = None
-    subnet: Optional[str] = None

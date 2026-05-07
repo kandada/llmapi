@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-
+from fastapi.responses import JSONResponse
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,13 +14,14 @@ from config import config
 
 import payment.adapters.stripe_adapter
 import payment.adapters.paypal_adapter
+from middleware.logger import RequestIdMiddleware
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="LLM API Gateway",
         description="OpenAI-compatible API Gateway",
-        version="0.0.1",
+        version="0.0.2",
     )
 
     app.add_middleware(SessionMiddleware, secret_key=config.SESSION_SECRET)
@@ -32,6 +33,12 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.add_middleware(RequestIdMiddleware)
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request, exc):
+        return JSONResponse(status_code=500, content={"error": {"message": str(exc), "type": "internal_error"}})
 
     @app.on_event("startup")
     async def startup_event():

@@ -251,7 +251,7 @@
         .btn-secondary:hover { background: #a6a9ad; }
 
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; vertical-align: top; line-height: 1.5; }
         th { background: #fafafa; font-weight: 500; color: #666; font-size: 13px; }
         tr:hover { background: #fafafa; }
 
@@ -265,7 +265,7 @@
         .success { color: #67c23a; margin-top: 10px; font-size: 13px; }
         .loading { text-align: center; padding: 60px; color: #909399; }
 
-        .api-key-display { font-family: 'Monaco', 'Menlo', monospace; background: #f5f7fa; padding: 8px 12px; border-radius: 4px; word-break: break-all; font-size: 13px; }
+        .api-key-display { font-family: 'Monaco', 'Menlo', monospace; background: #f5f7fa; padding: 8px 12px; border-radius: 4px; word-break: break-all; font-size: 13px; display: inline-block; }
 
         .stat-card { text-align: center; padding: 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
         .stat-value { font-size: 28px; color: #409eff; font-weight: bold; }
@@ -307,6 +307,9 @@
             font-size: 13px;
             line-height: 1.6;
         }
+
+        .model-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .model-list span { background: #ecf5ff; color: #409eff; padding: 2px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; }
 
         .quick-actions {
             display: flex;
@@ -473,7 +476,7 @@
                                 <span class="card-title">{{ t('api_usage_guide') }}</span>
                             </div>
                             <p style="color: #666; margin-bottom: 15px;">{{ t('api_usage_guide_desc') }}</p>
-                            <pre>curl -X POST https://your-domain.com/v1/chat/completions \
+                            <pre>curl -X POST {{ windowLocationOrigin }}/v1/chat/completions \
   -H "Authorization: Bearer {{ userToken }}" \
   -H "Content-Type: application/json" \
   -d '{"model": "deepseek-chat", "messages": [{"role": "user", "content": "Hello"}]}'</pre>
@@ -537,25 +540,24 @@
                                 <button class="btn btn-primary" @click="showCreateToken = true">{{ t('create_token') }}</button>
                             </div>
 
-                            <div v-if="showCreateToken" class="sub-card">
+                                <div v-if="showCreateToken" class="sub-card">
                                 <h3>{{ t('create_token') }}</h3>
                                 <div class="form-item">
-                                    <label>{{ t('token_name') }}</label>
-                                    <input type="text" v-model="newToken.name" :placeholder="t('token_name_placeholder')">
+                                    <label>{{ t('token_name') }} <span style="color:#f56c6c;">*</span></label>
+                                    <input type="text" v-model="newToken.name" :placeholder="t('token_name_placeholder')" required>
                                 </div>
                                 <div class="form-item">
-                                    <label>{{ t('quota') }} (-1: {{ t('unlimited') }})</label>
-                                    <input type="number" v-model="newToken.remain_quota" placeholder="1000000">
+                                    <label>{{ t('quota') }} <span style="color:#f56c6c;">*</span> (-1: {{ t('unlimited') }})</label>
+                                    <input type="number" v-model="newToken.remain_quota" placeholder="-1">
                                 </div>
                                 <div class="form-item">
-                                    <label>{{ t('expired_time') }} ({{ t('seconds') }}, -1: {{ t('never_expire') }})</label>
+                                    <label>{{ t('expired_time') }} <span style="color:#f56c6c;">*</span> (-1: {{ t('never_expire') }})</label>
                                     <input type="number" v-model="newToken.expired_time" placeholder="-1">
                                 </div>
                                 <div class="form-item">
-                                    <label>{{ t('channel_group') }}</label>
-                                    <select v-model="newToken.channel_group">
-                                        <option value="">{{ t('no_limit') }}</option>
-                                        <option v-for="g in channelGroups" :key="g" :value="g">{{ g }}</option>
+                                    <label>{{ t('channel_group') }} <span style="color:#f56c6c;">*</span></label>
+                                    <select v-model="newToken.channel_group" :disabled="!isAdmin">
+                                        <option v-for="g in channelGroupOptions" :key="g.value" :value="g.value" :disabled="g.disabled">{{ g.label }}</option>
                                     </select>
                                 </div>
                                 <button class="btn btn-success" @click="createToken">{{ t('create') }}</button>
@@ -565,23 +567,30 @@
 
                             <table style="width: 100%; table-layout: fixed;">
                                 <thead><tr>
-                                    <th style="width: 100px;">{{ t('name') }}</th>
-                                    <th style="width: 200px;">{{ t('key') }}</th>
-                                    <th style="width: 80px;">{{ t('channel_group') }}</th>
-                                    <th style="width: 80px;">{{ t('remain_quota') }}</th>
-                                    <th style="width: 70px;">{{ t('status') }}</th>
-                                    <th style="width: 140px;">{{ t('created_at') }}</th>
-                                    <th style="width: 80px;">{{ t('action') }}</th>
+                                    <th>{{ t('name') }}</th>
+                                    <th>{{ t('key') }}</th>
+                                    <th>{{ t('channel_group') }}</th>
+                                    <th>{{ t('models') }}</th>
+                                    <th>{{ t('remain_quota') }}</th>
+                                    <th>{{ t('status') }}</th>
+                                    <th>{{ t('created_at') }}</th>
+                                    <th>{{ t('action') }}</th>
                                 </tr></thead>
                                 <tbody>
                                     <tr v-for="token in tokens" :key="token.id">
-                                        <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ token.name }}</td>
-                                        <td><span class="api-key-display" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ token.key }}</span></td>
-                                        <td>{{ token.channel_group || '-' }}</td>
-                                        <td>{{ token.unlimited_quota ? t('unlimited') : formatQuota(token.remain_quota) }}</td>
-                                        <td><span :class="'status ' + (token.status === 1 ? 'status-active' : 'status-disabled')">{{ token.status === 1 ? t('enabled') : t('disabled') }}</span></td>
-                                        <td>{{ formatTime(token.created_time) }}</td>
-                                        <td><button class="btn btn-danger" @click="deleteToken(token.id)" style="padding: 5px 10px;">{{ t('delete') }}</button></td>
+                                        <td style="word-break: break-all; font-size: 13px;">{{ token.name }}</td>
+                                        <td style="word-break: break-all; font-family: Monaco, Menlo, monospace; font-size: 12px;">{{ token.key }}</td>
+                                        <td style="font-size: 13px;">{{ token.channel_group || '-' }}</td>
+                                        <td style="font-size: 13px;">
+                                            <div v-if="token.available_models && token.available_models.length" class="model-list">
+                                                <span v-for="m in token.available_models" :key="m">{{ m }}</span>
+                                            </div>
+                                            <span v-else>-</span>
+                                        </td>
+                                        <td style="font-size: 13px;">{{ token.unlimited_quota ? t('unlimited') : formatQuota(token.remain_quota) }}</td>
+                                        <td><span :class="'status ' + (token.status === 1 ? 'status-active' : 'status-disabled')" style="font-size: 12px;">{{ token.status === 1 ? t('enabled') : t('disabled') }}</span></td>
+                                        <td style="font-size: 13px;">{{ formatTime(token.created_time) }}</td>
+                                        <td><button class="btn btn-danger" @click="deleteToken(token.id)" style="padding: 4px 8px; font-size: 12px;">{{ t('delete') }}</button></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -611,7 +620,7 @@
                             <div style="margin-bottom: 30px;">
                                 <h3 style="color: #333; margin-bottom: 15px;">📡 {{ t('api_endpoint') }}</h3>
                                 <div style="background: #f5f7fa; padding: 15px; border-radius: 8px; font-family: monospace;">
-                                    <p style="margin: 0;"><strong>Base URL:</strong> <span style="color: #409eff;">http://your-domain:3000/v1</span></p>
+                                    <p style="margin: 0;"><strong>{{ t('base_url') }}:</strong> <span style="color: #409eff;">{{ windowLocationOrigin }}/v1</span></p>
                                 </div>
                             </div>
 
@@ -628,55 +637,13 @@
                                 <p style="color: #666; margin-bottom: 15px;">{{ t('chat_desc') }}</p>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">Python - OpenAI SDK</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from openai import OpenAI
-
-client = OpenAI(
-    api_key="YOUR_API_TOKEN",
-    base_url="http://your-domain:3000/v1"
-)
-
-response = client.chat.completions.create(
-    model="deepseek-chat",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant"},
-        {"role": "user", "content": "Hello"}
-    ],
-    max_tokens=500,
-    temperature=0.7
-)
-
-print(response.choices[0].message.content)</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeOpenaiSdk"></code></pre>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">Python - Anthropic SDK</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from anthropic import Anthropic
-
-client = Anthropic(
-    api_key="YOUR_API_TOKEN",
-    base_url="http://your-domain:3000/v1"
-)
-
-response = client.messages.create(
-    model="claude-3-5-sonnet-latest",
-    max_tokens=500,
-    messages=[
-        {"role": "user", "content": "Hello"}
-    ]
-)
-
-print(response.content[0].text)</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeAnthropicSdk"></code></pre>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X POST http://your-domain:3000/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-chat",
-    "messages": [
-      {"role": "user", "content": "Hello"}
-    ],
-    "max_tokens": 500,
-    "temperature": 0.7
-  }'</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeCurlChat"></code></pre>
                             </div>
 
                             <div style="margin-bottom: 30px;">
@@ -684,32 +651,10 @@ print(response.content[0].text)</code></pre>
                                 <p style="color: #666; margin-bottom: 15px;">{{ t('stream_desc') }}</p>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">Python - OpenAI SDK</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>from openai import OpenAI
-
-client = OpenAI(
-    api_key="YOUR_API_TOKEN",
-    base_url="http://your-domain:3000/v1"
-)
-
-stream = client.chat.completions.create(
-    model="deepseek-chat",
-    messages=[{"role": "user", "content": "Write a poem"}],
-    stream=True
-)
-
-for chunk in stream:
-    if chunk.choices[0].delta.content:
-        print(chunk.choices[0].delta.content, end="")</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeOpenaiStream"></code></pre>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X POST http://your-domain:3000/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "deepseek-chat",
-    "messages": [{"role": "user", "content": "Write a poem"}],
-    "stream": true
-  }'</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeCurlStream"></code></pre>
                             </div>
 
                             <div style="margin-bottom: 30px;">
@@ -717,8 +662,7 @@ for chunk in stream:
                                 <p style="color: #666; margin-bottom: 15px;">{{ t('available_models_desc') }}</p>
 
                                 <h4 style="color: #409eff; margin: 15px 0 10px;">cURL</h4>
-                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code>curl -X GET http://your-domain:3000/v1/models \
-  -H "Authorization: Bearer YOUR_API_TOKEN"</code></pre>
+                                <pre style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; overflow-x: auto; font-size: 13px;"><code v-html="codeCurlModels"></code></pre>
                             </div>
 
                             <div style="margin-bottom: 30px;">
@@ -775,8 +719,17 @@ for chunk in stream:
                                         </select>
                                     </div>
                                     <div class="form-item">
+                                        <label>{{ t('llm_gateway') }}</label>
+                                        <select v-model="newChannel.llm_gateway">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="anthropic">Anthropic</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
                                         <label>{{ t('group') }}</label>
-                                        <input type="text" v-model="newChannel.group" placeholder="default">
+                                        <select v-model="newChannel.group">
+                                            <option v-for="g in channelGroups" :key="g.name" :value="g.name">{{ g.name }}</option>
+                                        </select>
                                     </div>
                                     <div class="form-item">
                                         <label>{{ t('weight') }}</label>
@@ -806,9 +759,10 @@ for chunk in stream:
                                     <th style="width: 100px;">{{ t('name') }}</th>
                                     <th style="width: 80px;">{{ t('group') }}</th>
                                     <th style="width: 60px;">{{ t('weight') }}</th>
-                                    <th style="width: 100px;">{{ t('type') }}</th>
-                                    <th style="width: 70px;">{{ t('status') }}</th>
-                                    <th style="width: 180px;">{{ t('base_url') }}</th>
+                                    <th style="width: 80px;">{{ t('type') }}</th>
+                                    <th style="width: 60px;">{{ t('gateway') }}</th>
+                                    <th style="width: 60px;">{{ t('status') }}</th>
+                                    <th style="width: 150px;">{{ t('base_url') }}</th>
                                     <th style="width: 120px;">{{ t('models') }}</th>
                                     <th style="width: 140px;">{{ t('action') }}</th>
                                 </tr></thead>
@@ -819,6 +773,7 @@ for chunk in stream:
                                         <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.group }}</td>
                                         <td>{{ channel.weight }}</td>
                                         <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ getChannelTypeName(channel.type) }}</td>
+                                        <td style="font-size: 13px;">{{ channel.llm_gateway || 'openai' }}</td>
                                         <td><span :class="'status ' + (channel.status === 1 ? 'status-active' : 'status-disabled')">{{ channel.status === 1 ? t('enabled') : t('disabled') }}</span></td>
                                         <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.base_url }}</td>
                                         <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ channel.models }}</td>
@@ -862,12 +817,21 @@ for chunk in stream:
                                         <option value="44">Doubao</option>
                                         <option value="54">OpenAI Compatible</option>
                                         <option value="55">Gemini Compatible</option>
-                                    </select>
-                                </div>
-                                <div class="form-item">
-                                    <label>{{ t('group') }}</label>
-                                    <input type="text" v-model="editChannelData.group">
-                                </div>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('llm_gateway') }}</label>
+                                        <select v-model="editChannelData.llm_gateway">
+                                            <option value="openai">OpenAI</option>
+                                            <option value="anthropic">Anthropic</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-item">
+                                        <label>{{ t('group') }}</label>
+                                        <select v-model="editChannelData.group">
+                                            <option v-for="g in channelGroups" :key="g.name" :value="g.name">{{ g.name }}</option>
+                                        </select>
+                                    </div>
                                 <div class="form-item">
                                     <label>{{ t('weight') }}</label>
                                     <input type="number" v-model="editChannelData.weight">
@@ -908,6 +872,9 @@ for chunk in stream:
                                 <button class="btn btn-primary" @click="showCreateGroup = true">{{ t('add_group') }}</button>
                             </div>
                             <p style="color: #666; margin-bottom: 15px;">{{ t('group_desc') }}</p>
+                            <div style="background: #ecf5ff; border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #606266;">
+                                {{ t('group_hint') }}
+                            </div>
 
                             <div v-if="showCreateGroup" class="sub-card">
                                 <h3>{{ t('add_group') }}</h3>
@@ -1387,11 +1354,12 @@ for chunk in stream:
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, computed, onMounted } = Vue;
 
         const app = createApp({
             setup() {
                 const apiBase = '';
+                const windowLocationOrigin = window.location.origin;
                 const currentView = ref('dashboard');
                 const isLoggedIn = ref(false);
                 const isAdmin = ref(false);
@@ -1437,14 +1405,20 @@ for chunk in stream:
                 const loginError = ref('');
 
                 const showCreateToken = ref(false);
-                const newToken = ref({ name: '', remain_quota: 1000000, expired_time: -1, channel_group: '' });
+                const newToken = ref({ name: '', remain_quota: -1, expired_time: -1, channel_group: 'default' });
+                const channelGroupOptions = computed(() => {
+                    if (isAdmin.value) {
+                        return channelGroups.value.map(g => ({ label: g.name, value: g.name, disabled: false }));
+                    }
+                    return [{ label: 'default', value: 'default', disabled: false }];
+                });
                 const tokenError = ref('');
 
                 const showCreateChannel = ref(false);
-                const newChannel = ref({ name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100 });
+                const newChannel = ref({ name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100, llm_gateway: 'openai' });
                 const channelError = ref('');
                 const showEditChannel = ref(false);
-                const editChannelData = ref({ id: null, name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100, status: 1 });
+                const editChannelData = ref({ id: null, name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100, status: 1, llm_gateway: 'openai' });
 
                 const channelGroups = ref([]);
                 const selectedGroup = ref('');
@@ -1593,7 +1567,7 @@ for chunk in stream:
                     });
                     if (result?.success) {
                         showCreateToken.value = false;
-                        newToken.value = { name: '', remain_quota: 1000000, expired_time: -1, channel_group: '' };
+                        newToken.value = { name: '', remain_quota: -1, expired_time: -1, channel_group: 'default' };
                         await loadTokens();
                         await loadUserToken();
                     } else if (result) {
@@ -1622,11 +1596,12 @@ for chunk in stream:
                         models: newChannel.value.models,
                         group: newChannel.value.group || 'default',
                         weight: parseInt(newChannel.value.weight) || 100,
-                        status: 1
+                        status: 1,
+                        llm_gateway: newChannel.value.llm_gateway || 'openai',
                     });
                     if (result?.success) {
                         showCreateChannel.value = false;
-                        newChannel.value = { name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100 };
+                        newChannel.value = { name: '', type: '40', key: '', base_url: '', models: '', group: 'default', weight: 100, llm_gateway: 'openai' };
                         await loadChannels();
                         await loadChannelGroups();
                     } else if (result) {
@@ -1639,12 +1614,13 @@ for chunk in stream:
                         id: channel.id,
                         name: channel.name,
                         type: String(channel.type),
-                        key: channel.key || '',
+                        key: '',
                         base_url: channel.base_url || '',
                         models: channel.models || '',
                         group: channel.group || 'default',
                         weight: channel.weight || 100,
-                        status: channel.status || 1
+                        status: channel.status || 1,
+                        llm_gateway: channel.llm_gateway || 'openai',
                     };
                     showEditChannel.value = true;
                 };
@@ -1659,7 +1635,8 @@ for chunk in stream:
                         models: editChannelData.value.models,
                         group: editChannelData.value.group || 'default',
                         weight: parseInt(editChannelData.value.weight) || 100,
-                        status: parseInt(editChannelData.value.status)
+                        status: parseInt(editChannelData.value.status),
+                        llm_gateway: editChannelData.value.llm_gateway || 'openai',
                     });
                     if (result?.success) {
                         showEditChannel.value = false;
@@ -1930,6 +1907,25 @@ for chunk in stream:
                     return (quota / 1000000000).toFixed(1) + 'B';
                 };
 
+                const formatModels = (models) => {
+                    if (!models) return '';
+                    return models.split(',').map(m => `<span>${m.trim()}</span>`).join('');
+                };
+
+                const baseApiUrl = window.location.origin + '/v1';
+
+                const codeOpenaiSdk = `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="YOUR_API_TOKEN",\n    base_url="${baseApiUrl}"\n)\n\nresponse = client.chat.completions.create(\n    model="deepseek-chat",\n    messages=[\n        {"role": "system", "content": "You are a helpful assistant"},\n        {"role": "user", "content": "Hello"}\n    ],\n    max_tokens=500,\n    temperature=0.7\n)\n\nprint(response.choices[0].message.content)`;
+
+                const codeAnthropicSdk = `from anthropic import Anthropic\n\nclient = Anthropic(\n    api_key="YOUR_API_TOKEN",\n    base_url="${baseApiUrl}"\n)\n\nresponse = client.messages.create(\n    model="claude-3-5-sonnet-latest",\n    max_tokens=500,\n    messages=[\n        {"role": "user", "content": "Hello"}\n    ]\n)\n\nprint(response.content[0].text)`;
+
+                const codeCurlChat = `curl -X POST ${baseApiUrl}/chat/completions \\\n  -H "Authorization: Bearer YOUR_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "deepseek-chat",\n    "messages": [\n      {"role": "user", "content": "Hello"}\n    ],\n    "max_tokens": 500,\n    "temperature": 0.7\n  }'`;
+
+                const codeOpenaiStream = `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="YOUR_API_TOKEN",\n    base_url="${baseApiUrl}"\n)\n\nstream = client.chat.completions.create(\n    model="deepseek-chat",\n    messages=[{"role": "user", "content": "Write a poem"}],\n    stream=True\n)\n\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end="")`;
+
+                const codeCurlStream = `curl -X POST ${baseApiUrl}/chat/completions \\\n  -H "Authorization: Bearer YOUR_API_TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "deepseek-chat",\n    "messages": [{"role": "user", "content": "Write a poem"}],\n    "stream": true\n  }'`;
+
+                const codeCurlModels = `curl -X GET ${baseApiUrl}/models \\\n  -H "Authorization: Bearer YOUR_API_TOKEN"`;
+
                 const formatTime = (timestamp) => {
                     if (!timestamp) return '';
                     return new Date(timestamp * 1000).toLocaleString('zh-CN');
@@ -1970,8 +1966,8 @@ for chunk in stream:
                 });
 
                 return {
-                    currentView, isLoggedIn, isAdmin, loading, userInfo, userToken, tokens, channels, users, redemptions, recentLogs, allLogs,
-                    channelGroups, selectedGroup, selectedGroupChannels, showCreateGroup, newGroupName, showRenameGroup, renameGroupOld, renameGroupNew,
+                    windowLocationOrigin, currentView, isLoggedIn, isAdmin, loading, userInfo, userToken, tokens, channels, users, redemptions, recentLogs, allLogs,
+                    channelGroups, channelGroupOptions, selectedGroup, selectedGroupChannels, showCreateGroup, newGroupName, showRenameGroup, renameGroupOld, renameGroupNew,
                     showDeleteGroup, deleteGroupName, deleteGroupAction, groupError, loginForm, loginError,
                     showCreateToken, newToken, tokenError, showCreateChannel, newChannel, channelError,
                     showEditChannel, editChannelData, editChannel, doEditChannel,
@@ -1982,7 +1978,8 @@ for chunk in stream:
                     redeemCode, redeemMsg, redeeming,
                     login, logout, createToken, deleteToken, createChannel, deleteChannel, createUser, deleteUser,
                     showResetPassword, doResetPassword, createRedemption, redeemCodeFn,
-                    formatQuota, formatTime, getRoleName, getChannelTypeName, getOrderStatusColor, getViewName,
+                    formatQuota, formatTime, formatModels, getRoleName, getChannelTypeName, getOrderStatusColor, getViewName,
+                    codeOpenaiSdk, codeAnthropicSdk, codeCurlChat, codeOpenaiStream, codeCurlStream, codeCurlModels,
                     loadChannels, loadUsers, loadRedemptions, loadAllLogs, loadChannelGroups, viewGroupChannels,
                     createGroup, doRenameGroup, doDeleteGroup, loadPackages, createPackage, deletePackage, loadAllOrders,
                     logsPage, deleteOldLogs,

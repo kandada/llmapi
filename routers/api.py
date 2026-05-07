@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api")
 async def get_status():
     from schemas.request import APIResponse
     return APIResponse(success=True, data={
-        "version": "0.0.1",
+        "version": "0.0.2",
         "status": "ok",
         "mode": "normal",
     })
@@ -368,13 +368,6 @@ async def admin_topup(
 ):
     controller = UserController(db)
     return await controller.admin_topup(user_id, quota, remark, ctx)
-
-
-channel_controller = ChannelController
-token_controller = TokenController
-redemption_controller = RedemptionController
-option_controller = OptionController
-log_controller = LogController
 
 
 @router.get("/channel/", response_model=APIResponse)

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+import json
 
 from database import get_session
 from controllers.package import PackageController
@@ -81,3 +83,49 @@ async def get_my_orders(
     controller = OrderController(db)
     orders = controller.get_user_orders(ctx)
     return APIResponse(success=True, data=orders)
+
+
+@router.get("/success")
+async def payment_success(
+    session_id: str = "",
+    db: Session = Depends(get_session),
+):
+    result = "error"
+    order_no = ""
+    if session_id:
+        secret_key = __import__('os').environ.get("STRIPE_SECRET_KEY", "")
+        if secret_key:
+            import httpx
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"https://api.stripe.com/v1/checkout/sessions/{session_id}",
+                        headers={"Authorization": f"Bearer {secret_key}"},
+                    )
+                    data = resp.json()
+                    payment_status = data.get("payment_status", "")
+                    order_no = data.get("metadata", {}).get("order_no", "")
+                    if payment_status == "paid" and order_no:
+                        from services.order_service import OrderService
+                        from services.user_service import UserService
+                        from services.log_service import LogService
+                        from models.order import OrderStatus
+                        from models.package import Package
+                        order_svc = OrderService(db)
+                        order = order_svc.get_order_by_no(order_no)
+                        if order and order.status == OrderStatus.PENDING:
+                            pkg = db.query(Package).filter(Package.id == order.package_id).first()
+                            if pkg:
+                                order_svc.update_order_status(order_no, OrderStatus.PAID)
+                                UserService(db).increase_quota(order.user_id, pkg.quota)
+                                user = UserService(db).get_user_by_id(order.user_id)
+                                LogService(db).record_topup(order.user_id, user.username if user else "", f"Stripe: {pkg.name}", pkg.quota)
+                        result = "1"
+                    elif payment_status == "unpaid":
+                        result = "0"
+                    else:
+                        result = "error"
+            except Exception:
+                result = "error"
+
+    return RedirectResponse(url=f"/shop?order={order_no}&paid={result}")

@@ -12,8 +12,15 @@ class TurnstileMiddleware(BaseHTTPMiddleware):
         if request.method == "GET":
             return await call_next(request)
 
-        turnstile_token = request.headers.get("CF-Turnstile-Token") or \
-                        request.form().get("cf-turnstile-response") if request.method == "POST" else None
+        turnstile_token = request.headers.get("CF-Turnstile-Token")
+
+        if not turnstile_token:
+            if request.method == "POST":
+                try:
+                    form_data = await request.form()
+                    turnstile_token = form_data.get("cf-turnstile-response")
+                except:
+                    pass
 
         if not turnstile_token:
             body = await request.body()

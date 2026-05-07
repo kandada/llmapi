@@ -1,26 +1,24 @@
-from fastapi import Request, Depends, HTTPException
+from fastapi import Request, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 import httpx
 import json
 import time
 
-from database import get_session
 from services.user_service import UserService
 from services.token_service import TokenService
 from services.channel_service import ChannelService
 from services.log_service import LogService
-from services.cache_service import cache_service
+from services.cache_service import cache_service, channel_monitor_cache
 from billing.calculator import RelayService as BillingRelayService, PreconsumeQuotaService
 from middleware.auth import AuthContext, require_user, validate_token_model_permission
 from middleware.distributor import Distributor
-from relay.adaptor import AdaptorFactory
-from schemas.request import APIResponse
+from relay.adaptor import AdaptorFactory, get_http_client
 from config import config
 
 
 class RelayController:
-    def __init__(self, db: Session = Depends(get_session)):
+    def __init__(self, db: Session):
         self.db = db
         self.user_service = UserService(db)
         self.token_service = TokenService(db)
@@ -39,7 +37,7 @@ class RelayController:
                 content += msg.content
         return len(content) // 4
 
-    async def chat_completions(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def chat_completions(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -142,9 +140,6 @@ class RelayController:
                     continue
                 break
 
-        if preconsumed_quota > 0:
-            self.preconsume_service.return_preconsumed(ctx.token_id, ctx.user_id, preconsumed_quota)
-
         raise HTTPException(status_code=503, detail=f"Request failed after {retry_times + 1} attempts: {last_error}")
 
     async def _handle_normal(
@@ -175,7 +170,7 @@ class RelayController:
                     content=response.json() if hasattr(response, 'json') else {"error": {"message": str(response), "type": "upstream_error"}},
                 )
 
-            await self._record_channel_success(channel.id)
+            self._record_channel_success(channel.id)
 
             if preconsumed_quota > 0:
                 data = response.json()
@@ -208,9 +203,10 @@ class RelayController:
             error_occurred = False
             completion_tokens = 0
             prompt_tokens = 0
+            total_content = ""
 
             async def generate():
-                nonlocal first_chunk, error_occurred, completion_tokens, prompt_tokens
+                nonlocal first_chunk, error_occurred, completion_tokens, prompt_tokens, total_content
                 try:
                     async for chunk in response:
                         if first_chunk and chunk.startswith("data: "):
@@ -238,14 +234,21 @@ class RelayController:
                                 if "usage" in data:
                                     prompt_tokens = data["usage"].get("prompt_tokens", 0)
                                     completion_tokens = data["usage"].get("completion_tokens", 0)
+                                else:
+                                    delta = data.get("choices", [{}])[0].get("delta", {})
+                                    if delta.get("content"):
+                                        total_content += delta["content"]
                             except:
                                 pass
                         yield chunk
 
                     if not error_occurred:
-                        self._record_channel_success(channel.id)
+                        channel_monitor_cache.record_success(channel.id)
                         if preconsumed_quota > 0:
-                            actual_quota = self.billing_service.calculate_quota(mapped_model, prompt_tokens, completion_tokens, user_group, channel.type)
+                            p, c = prompt_tokens, completion_tokens
+                            if p == 0 and c == 0 and total_content:
+                                c = len(total_content) // 4
+                            actual_quota = self.billing_service.calculate_quota(mapped_model, p, c, user_group, channel.type)
                             self.preconsume_service.post_consume(ctx.token_id, ctx.user_id, actual_quota, preconsumed_quota)
                     elif preconsumed_quota > 0:
                         self.preconsume_service.return_preconsumed(ctx.token_id, ctx.user_id, preconsumed_quota)
@@ -255,7 +258,6 @@ class RelayController:
                     if preconsumed_quota > 0:
                         self.preconsume_service.return_preconsumed(ctx.token_id, ctx.user_id, preconsumed_quota)
                     self._record_channel_error(channel.id, str(e))
-                    import json
                     error_json = json.dumps({"error": {"message": str(e), "type": "upstream_error"}})
                     yield f"data: {error_json}\n\n"
                     yield "data: [DONE]\n\n"
@@ -263,27 +265,14 @@ class RelayController:
             return StreamingResponse(generate(), media_type="text/event-stream")
 
     def _record_channel_success(self, channel_id: int):
-        cache_key = f"channel_success:{channel_id}"
-        cache_service.set(cache_key, True, ttl=60)
+        channel_monitor_cache.record_success(channel_id)
 
     def _record_channel_error(self, channel_id: int, error_msg: str):
-        cache_key = f"channel_error:{channel_id}"
-        errors = cache_service.get(cache_key) or []
-        errors.append(error_msg)
-        if len(errors) > 10:
-            errors = errors[-10:]
-        cache_service.set(cache_key, errors, ttl=60)
+        channel_monitor_cache.record_error(channel_id, error_msg)
+        if channel_monitor_cache.should_disable(channel_id):
+            self.channel_service.disable_channel(channel_id)
 
-        if len(errors) >= 5:
-            recent_errors = errors[-5:]
-            error_counts = {}
-            for err in recent_errors:
-                error_counts[err] = error_counts.get(err, 0) + 1
-            max_count = max(error_counts.values())
-            if max_count >= 4:
-                self.channel_service.disable_channel(channel_id)
-
-    async def completions(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def completions(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -296,7 +285,7 @@ class RelayController:
 
         return await self.chat_completions(request, ctx)
 
-    async def embeddings(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def embeddings(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -343,8 +332,8 @@ class RelayController:
                 url = adaptor.get_request_url(meta_with_model, "/v1/embeddings")
                 headers = adaptor.get_headers(meta_with_model)
 
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    response = await client.post(url, headers=headers, json=embed_request)
+                client = get_http_client()
+                response = await client.post(url, headers=headers, json=embed_request)
 
                 if response.status_code == 200:
                     data = response.json()
@@ -360,7 +349,7 @@ class RelayController:
             "model": model,
         })
 
-    async def images_generations(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def images_generations(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -410,8 +399,8 @@ class RelayController:
             url = adaptor.get_request_url(meta, "/v1/images/generations")
             headers = adaptor.get_headers(meta)
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(url, headers=headers, json=image_request)
+            client = get_http_client()
+            response = await client.post(url, headers=headers, json=image_request)
 
             if response.status_code != 200:
                 return JSONResponse(
@@ -425,7 +414,7 @@ class RelayController:
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timeout")
 
-    async def audio_transcriptions(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def audio_transcriptions(self, request: Request, ctx: AuthContext) -> Response:
         try:
             form_data = await request.form()
         except:
@@ -468,9 +457,9 @@ class RelayController:
 
             file_content = await file.read()
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                files = {"file": (file.filename, file_content, file.content_type)}
-                response = await client.post(url, headers=headers, files=files, data={"model": mapped_model})
+            client = get_http_client()
+            files = {"file": (file.filename, file_content, file.content_type)}
+            response = await client.post(url, headers=headers, files=files, data={"model": mapped_model})
 
             if response.status_code != 200:
                 return JSONResponse(
@@ -484,10 +473,10 @@ class RelayController:
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timeout")
 
-    async def audio_translations(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def audio_translations(self, request: Request, ctx: AuthContext) -> Response:
         return await self.audio_transcriptions(request, ctx)
 
-    async def audio_speech(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def audio_speech(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -540,8 +529,8 @@ class RelayController:
             if "speed" in body:
                 speech_request["speed"] = body["speed"]
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(url, headers=headers, json=speech_request)
+            client = get_http_client()
+            response = await client.post(url, headers=headers, json=speech_request)
 
             if response.status_code != 200:
                 return JSONResponse(
@@ -554,7 +543,7 @@ class RelayController:
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timeout")
 
-    async def list_models(self, ctx: AuthContext = Depends(require_user)) -> JSONResponse:
+    async def list_models(self, ctx: AuthContext) -> JSONResponse:
         models = []
         channels = self.channel_service.get_all_enabled_channels()
 
@@ -573,14 +562,14 @@ class RelayController:
             "data": [{"id": m, "object": "model"} for m in models],
         })
 
-    async def retrieve_model(self, model: str, ctx: AuthContext = Depends(require_user)) -> JSONResponse:
+    async def retrieve_model(self, model: str, ctx: AuthContext) -> JSONResponse:
         return JSONResponse(content={
             "id": model,
             "object": "model",
             "owned_by": "openai",
         })
 
-    async def edits(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def edits(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -635,8 +624,8 @@ class RelayController:
             if "n" in body:
                 edit_request["n"] = body["n"]
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(url, headers=headers, json=edit_request)
+            client = get_http_client()
+            response = await client.post(url, headers=headers, json=edit_request)
 
             if response.status_code != 200:
                 return JSONResponse(
@@ -650,7 +639,7 @@ class RelayController:
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Request timeout")
 
-    async def moderations(self, request: Request, ctx: AuthContext = Depends(require_user)) -> Response:
+    async def moderations(self, request: Request, ctx: AuthContext) -> Response:
         try:
             body = await request.json()
         except:
@@ -696,8 +685,8 @@ class RelayController:
                 "input": input_text,
             }
 
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(url, headers=headers, json=moderation_request)
+            client = get_http_client()
+            response = await client.post(url, headers=headers, json=moderation_request)
 
             if response.status_code != 200:
                 return JSONResponse(
